@@ -22,7 +22,7 @@ A Python-based application for automatically ranking resumes against job descrip
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/resume-ranking-system.git
+git clone https://github.com/Raghav2409/resume-ranking-system.git
 cd resume-ranking-system
 ```
 
