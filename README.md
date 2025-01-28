@@ -2,7 +2,7 @@
 
 A Python-based application for automatically ranking resumes against job descriptions using NLP techniques and AI-powered insights. The system provides two implementations:
 1. A web interface built with Streamlit
-2. A command-line version that outputs results to CSV
+2. A CSV version of output results
 
 ## Features
 
