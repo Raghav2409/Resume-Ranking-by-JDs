@@ -1,0 +1,7 @@
+Job Description – Java Developer 
+
+Initial JD from Client 
+
+Pure backend java , backlogging , log analyze,  restful services,  spring ,spring security , spring boot ,Microservices 
+
+ 
