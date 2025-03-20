@@ -77,7 +77,7 @@ class JobDescriptionAnalyzer:
         return scores
 
 class JobDescriptionAgent:
-    def __init__(self, model_id, max_tokens=1500, temperature=0.7):
+    def __init__(self, model_id, max_tokens=5000, temperature=0.7):
         self.model_id = model_id
         self.max_tokens = max_tokens
         self.temperature = temperature
@@ -85,14 +85,15 @@ class JobDescriptionAgent:
         # Get AWS credentials from environment variables or use a proper credential provider
         # SECURITY: Replace hardcoded credentials with proper credential management
         self.client = boto3.client(
-                service_name='bedrock-runtime',
-                aws_access_key_id='',
-                aws_secret_access_key='',
-                region_name='us-east-1',
-            )
+            service_name='bedrock-runtime',
+            aws_access_key_id=st.secrets["aws"]["access_key"],
+            aws_secret_access_key=st.secrets["aws"]["secret_key"],
+            region_name=st.secrets["aws"]["region"],
+        )
 
     def generate_initial_descriptions(self, job_description):
         """Generate detailed and structured job descriptions based on the given job description."""
+        
         prompt = (
             "You are a job description specialist. Your task is to refine and expand upon the provided job description, "
             "creating three distinct versions that are structured, detailed, and aligned with industry best practices.\n\n"
@@ -125,6 +126,7 @@ class JobDescriptionAgent:
             
             "VERSION 3:\n"
             "[Complete third job description with all sections]\n\n"
+            
             f"### Original Job Description:\n{job_description}\n"
         )
 
@@ -179,12 +181,25 @@ class JobDescriptionAgent:
             feedback_history (list): List of previous feedback items
         """
         # Construct prompt with feedback history
-        feedback_context = "\n".join([
-            f"Previous Feedback {i+1}: {feedback}" 
-            for i, feedback in enumerate(feedback_history[:-1])
-        ])
+        feedback_context = ""
+        for i, feedback_item in enumerate(feedback_history[:-1]):
+            if isinstance(feedback_item, dict):
+                feedback_type = feedback_item.get("type", "General Feedback")
+                feedback_text = feedback_item.get("feedback", "")
+                feedback_context += f"Previous Feedback {i+1} ({feedback_type}): {feedback_text}\n\n"
+            else:
+                feedback_context += f"Previous Feedback {i+1}: {feedback_item}\n\n"
         
-        current_feedback = feedback_history[-1] if feedback_history else ""
+        # Handle current feedback
+        current_feedback = ""
+        if feedback_history:
+            last_feedback = feedback_history[-1]
+            if isinstance(last_feedback, dict):
+                feedback_type = last_feedback.get("type", "General Feedback")
+                feedback_text = last_feedback.get("feedback", "")
+                current_feedback = f"({feedback_type}): {feedback_text}"
+            else:
+                current_feedback = last_feedback
         
         prompt = (
             "You are an expert in job description refinement. Your task is to enhance the given job description "
@@ -193,30 +208,20 @@ class JobDescriptionAgent:
             f"### Selected Job Description to Enhance:\n{selected_description}\n\n"
         )
         if feedback_context:
-            prompt += f"Previous Feedback Applied:\n{feedback_context}\n\n"
+            prompt += f"### Previous Feedback Already Incorporated:\n{feedback_context}\n\n"
         
-        prompt = (
-            "You are an expert in job description refinement. Your task is to enhance the given job description "
-            "by incorporating all past feedback while ensuring clarity, engagement, and alignment with industry standards.\n\n"
+        if current_feedback:
+            prompt += f"### New Feedback to Implement:\n{current_feedback}\n\n"
         
-            "### Guidelines:\n"
-            "- Implement **all previous feedback** while ensuring the improvements are preserved.\n"
-            "- Apply **new feedback** carefully, making precise modifications where necessary.\n"
-            "- Maintain **concise and engaging** language while improving structure and readability.\n"
-            "- Avoid **redundancies** or overly technical jargon unless necessary.\n"
-            "- Continue referring to the position as **'this role'** instead of using specific job titles.\n\n"
-        
-            "### Structure for the Enhanced Job Description:\n"
-            "**1. Role Overview:** Improve clarity and relevance of the role's purpose.\n"
-            "**2. Key Responsibilities:** Adjust or expand based on feedback to better reflect the role’s expectations.\n"
-            "**3. Required Skills:** Ensure all crucial skills are included and refined as per the feedback.\n"
-            "**4. Preferred Skills:** Integrate new suggestions while maintaining original context.\n"
-            "**5. Required Experience:** Make modifications if prior feedback suggests changes.\n"
-            "**6. Preferred Experience:** Enhance and clarify additional experience recommendations.\n"
-            "**7. Tools & Technologies:** Adjust the list of tools and technologies as needed.\n"
-            "**8. Work Environment & Expectations:** Ensure all feedback is reflected in this section.\n\n"
-            "Now, refine and enhance this job description by applying the feedback effectively while preserving the core details."
-        )
+        prompt += (
+                "### Guidelines:\n"
+                "- Implement all feedback while preserving the original core requirements\n"
+                "- Maintain clear section structure and professional language\n"
+                "- Continue referring to the position as 'this role'\n"
+                "- Produce a complete, refined job description ready for immediate use\n\n"
+                
+                "Return the complete enhanced job description incorporating all feedback."
+            )
         native_request = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": self.max_tokens,
@@ -318,6 +323,12 @@ def init_session_state():
         
     if 'final_version' not in st.session_state:
         st.session_state.final_version = None
+        
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = "generate"  # Default page: "generate" or "refine"
+        
+    if 'feedback_type' not in st.session_state:
+        st.session_state.feedback_type = "General Feedback"
 
 def get_or_create_logger():
     """Get existing logger from session state or create a new one"""
@@ -357,23 +368,42 @@ def render_role_selector():
     # Define available roles
     roles = ["Recruiter", "Hiring Manager", "Candidate", "HR Manager", "Team Lead"]
     
-    # Role selection
-    selected_role = st.selectbox(
-        "Your Role:",
-        options=roles,
-        index=roles.index(st.session_state.role) if st.session_state.role in roles else 0,
-        help="Select your role in the hiring process"
-    )
+    # Create columns for role and feedback type
+    col1, col2 = st.columns(2)
     
-    # Update role if changed
-    if selected_role != st.session_state.role:
-        st.session_state.role = selected_role
+    with col1:
+        # Role selection
+        selected_role = st.selectbox(
+            "Your Role:",
+            options=roles,
+            index=roles.index(st.session_state.role) if st.session_state.role in roles else 0,
+            help="Select your role in the hiring process"
+        )
         
-        # Update logger if it exists
-        if 'logger' in st.session_state:
-            st.session_state.logger.username = selected_role
-            st.session_state.logger.current_state["username"] = selected_role
-            st.session_state.logger._save_state()
+        # Update role if changed
+        if selected_role != st.session_state.role:
+            st.session_state.role = selected_role
+            
+            # Update logger if it exists
+            if 'logger' in st.session_state:
+                st.session_state.logger.username = selected_role
+                st.session_state.logger.current_state["username"] = selected_role
+                st.session_state.logger._save_state()
+    
+    with col2:
+        # Feedback type selection
+        feedback_types = ["General Feedback", "Rejected Candidate", "Hiring Manager Feedback", 
+                         "Client Feedback", "Selected Candidate", "Interview Feedback"]
+        selected_feedback_type = st.selectbox(
+            "Default Feedback Type:",
+            options=feedback_types,
+            index=feedback_types.index(st.session_state.feedback_type) if st.session_state.feedback_type in feedback_types else 0,
+            help="Select the default type of feedback you'll be providing"
+        )
+        
+        # Update feedback type if changed
+        if selected_feedback_type != st.session_state.feedback_type:
+            st.session_state.feedback_type = selected_feedback_type
 
 def display_filtered_feedback_history():
     """Display feedback history with filtering options without creating new sessions"""
@@ -391,6 +421,7 @@ def display_filtered_feedback_history():
     unique_roles = set()
     unique_files = set()
     unique_dates = set()
+    unique_feedback_types = set()
     
     # Loop through each session to collect feedback
     for session_info in sessions:
@@ -426,16 +457,22 @@ def display_filtered_feedback_history():
                     # Handle different feedback formats (string or dict)
                     if isinstance(feedback, dict):
                         feedback_content = feedback.get("feedback", "")
+                        feedback_type = feedback.get("type", "General Feedback")
                         feedback_role = feedback.get("role", role)
                     else:
                         feedback_content = feedback
+                        feedback_type = "General Feedback"
                         feedback_role = role
+                    
+                    # Add to unique feedback types
+                    unique_feedback_types.add(feedback_type)
                     
                     all_feedback.append({
                         "Role": feedback_role,
                         "File": file_name,
                         "Session Date": session_date,
                         "Feedback Time": feedback_time,
+                        "Feedback Type": feedback_type,
                         "Feedback": feedback_content
                     })
         except Exception as e:
@@ -470,7 +507,7 @@ def display_filtered_feedback_history():
     
     # Create filters with a container to keep UI clean
     with st.expander("Filter Feedback", expanded=False):
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             # Role filter - make sure we handle None values in the unique_roles set
@@ -492,6 +529,16 @@ def display_filtered_feedback_history():
                 key="filter_files"
             )
         
+        with col3:
+            # Feedback type filter
+            cleaned_feedback_types = [ft for ft in unique_feedback_types if ft is not None]
+            selected_feedback_types = st.multiselect(
+                "Filter by Feedback Type:",
+                options=sorted(cleaned_feedback_types),
+                default=[],
+                key="filter_types"
+            )
+        
         # Text search
         search_text = st.text_input("Search in feedback:", "", key="search_feedback")
     
@@ -503,6 +550,9 @@ def display_filtered_feedback_history():
     
     if selected_files:
         filtered_df = filtered_df[filtered_df["File"].isin(selected_files)]
+    
+    if selected_feedback_types:
+        filtered_df = filtered_df[filtered_df["Feedback Type"].isin(selected_feedback_types)]
     
     if search_text:
         filtered_df = filtered_df[filtered_df["Feedback"].str.contains(search_text, case=False, na=False)]
@@ -534,6 +584,7 @@ def display_filtered_feedback_history():
                 "Role": st.column_config.TextColumn("Role"),
                 "File": st.column_config.TextColumn("Job Description"),
                 "Formatted Time": st.column_config.TextColumn("Time"),
+                "Feedback Type": st.column_config.TextColumn("Feedback Type"),
                 "Feedback": st.column_config.TextColumn("Feedback Content", width="large"),
             },
             hide_index=True
@@ -595,98 +646,87 @@ def start_new_session():
         if key in st.session_state:
             del st.session_state[key]
     
+    # Also reset current page to generate
+    st.session_state.current_page = "generate"
+    
     # Flag for reload
     st.session_state.reload_flag = True
 
+def switch_to_refinement_page():
+    """Switch to the refinement page"""
+    st.session_state.current_page = "refine"
+    st.rerun()
+
+def switch_to_generation_page():
+    """Switch to the generation page"""
+    st.session_state.current_page = "generate"
+    st.rerun()
+
 def display_help_section():
-    """Display a collapsible help section with instructions"""
-    with st.expander("How to Use This Tool", expanded=False):
-        st.markdown("""
-        ### 💼 Job Description Enhancer - Instructions
+    """Display a simple horizontal workflow help text in an expander"""
+    with st.expander("📚 How to Use This Tool", expanded=False):
+        # Use a simple horizontal text layout
+        help_html = """
+        <style>
+        .horizontal-workflow {
+            width: 100%;
+            white-space: nowrap;
+            overflow-x: auto;
+            padding: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .workflow-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .workflow-steps {
+            display: flex;
+            align-items: center;
+        }
+        .step {
+            margin-right: 5px;
+        }
+        .arrow {
+            margin: 0 5px;
+            color: #666;
+        }
+        .tips {
+            margin-top: 10px;
+            font-style: italic;
+        }
+        </style>
         
-        This tool helps you enhance job descriptions through AI-powered suggestions and iterative feedback. Follow these simple steps:
+        <div class="horizontal-workflow">
+            <div class="workflow-title">JD Enhancer Workflow:</div>
+            <div class="workflow-steps">
+                <span class="step">1. Select Role</span>
+                <span class="arrow">→</span>
+                <span class="step">2. Choose File</span>
+                <span class="arrow">→</span>
+                <span class="step">3. Generate Versions</span>
+                <span class="arrow">→</span>
+                <span class="step">4. Review</span>
+                <span class="arrow">→</span>
+                <span class="step">5. Select Version</span>
+                <span class="arrow">→</span>
+                <span class="step">6. Provide Feedback</span>
+                <span class="arrow">→</span>
+                <span class="step">7. Generate Final</span>
+                <span class="arrow">→</span>
+                <span class="step">8. Download</span>
+            </div>
+            <div class="tips">
+                Tips: Be specific in feedback • Consider different aspects • Use analysis charts for balanced coverage
+            </div>
+        </div>
+        """
         
-        1. **Select Your Role**: Choose your role in the hiring process.
-        
-        2. **Choose a Job Description File**: Select an existing job description file from the dropdown or upload a new one.
-        
-        3. **Generate Enhanced Versions**: Click the "Generate Enhanced Versions" button to create three AI-powered improvements of your original job description.
-        
-        4. **Review and Compare**: Compare the original and enhanced versions using the content view and analysis charts.
-        
-        5. **Select a Version**: Choose the version you like best as a starting point for further refinement.
-        
-        6. **Provide Feedback**: Enter specific feedback to make the job description even better. You can continue providing feedback in multiple rounds.
-        
-        7. **Generate Final Version**: When you're satisfied with your feedback, generate the final enhanced version.
-        
-        8. **Download Your Result**: Download the final job description in your preferred format.
-        
-        #### Tips for Best Results:
-        - Be specific in your feedback (e.g., "Add more emphasis on leadership skills")
-        - Consider different aspects (responsibilities, qualifications, company culture)
-        - Use the analysis charts to ensure your JD has balanced coverage of all important categories
-        """)
+        # Display the simple horizontal workflow
+        st.markdown(help_html, unsafe_allow_html=True)
 
-def main():
-    # Use a clean Streamlit theme
-    st.set_page_config(
-        page_title="Job Description Enhancer",
-        page_icon="💼",
-        layout="wide",
-        initial_sidebar_state="collapsed"
-    )
-
-    # Initialize session state
-    init_session_state()
-    
-    # Get or create logger
-    logger = get_or_create_logger()
-    
-    # Clean up old logs in the background
-    cleanup_old_logs()
-
-    # Display header with title and role selector in same row
-    st.markdown("<h1 style='text-align: center;'>💼 Job Description Enhancer</h1>", unsafe_allow_html=True)
-    
-    # Display help button in the top right
-    help_col, title_col = st.columns([1, 5])
-    with help_col:
-        display_help_section()
-    
-    # Space before role selector
-    st.write("")
-
-    # Render role selector
-    render_role_selector()
-    
-    # Session management in a cleaner horizontal layout
-    session_col1, session_col2, session_col3 = st.columns(3)
-    
-    with session_col1:
-        st.button("🔄 Start New Session", on_click=start_new_session)
-        
-    with session_col2:
-        st.caption(f"Current Session ID: {logger.session_id[:8]}...")
-        st.caption(f"Role: {logger.username}")
-        
-    with session_col3:
-        if logger.current_state["actions"]:
-            st.caption(f"Actions in this session: {len(logger.current_state['actions'])}")
-            if logger.current_state["selected_file"]:
-                st.caption(f"Working with: {logger.current_state['selected_file']}")
-    
-    # Add a separator
-    st.markdown("---")
-
-    # Initialize the analyzer and agent
-    analyzer = JobDescriptionAnalyzer()
-    agent = JobDescriptionAgent(model_id="anthropic.claude-3-haiku-20240307-v1:0")
-    
-    if 'final_version' not in st.session_state:
-        st.session_state.final_version = None
-    
-    # File selection
+def render_generation_page(logger, analyzer, agent):
+    """Render the JD generation page"""
     st.markdown("### 📄 Job Description Selection")
     
     jd_directory = os.path.join(os.getcwd(), "JDs")
@@ -897,135 +937,163 @@ def main():
                         key="intermediate_comparison"
                     )
                     st.caption("Percentages indicate keyword coverage in each category")
+                    
+            # After reviewing enhanced versions, add button to continue to refinement phase
+            st.markdown("### Next Steps")
+            
+            refinement_col1, refinement_col2 = st.columns(2)
+            
+            with refinement_col1:
+                if st.button("Continue to Version Selection & Feedback", type="primary"):
+                    switch_to_refinement_page()
+            
+            with refinement_col2:
+                st.caption("Proceed to select your preferred version and provide feedback to further refine the job description.")
+
+def render_refinement_page(logger, analyzer, agent):
+    """Render the JD refinement and feedback page"""
+    
+    # Add navigation breadcrumb with return option
+    breadcrumb_col1, breadcrumb_col2 = st.columns([1, 4])
+    with breadcrumb_col1:
+        if st.button("← Back to Version Generation", key="back_btn"):
+            switch_to_generation_page()
+    
+    with breadcrumb_col2:
+        st.markdown("### 🔄 Version Selection & Feedback")
+    
+    # Make sure we have the session data we need
+    if ('original_jd' not in st.session_state or 
+        'enhanced_versions' not in st.session_state or 
+        len(st.session_state.enhanced_versions) < 3):
+        st.error("Please generate enhanced versions first before proceeding to refinement.")
+        if st.button("Go to Generation Page", key="goto_gen"):
+            switch_to_generation_page()
+        return
+    
+    # Setup the layout with two columns
+    left_col, right_col = st.columns([1, 1])
+    
+    # In the left column, show the version selection and previous feedback
+    with left_col:
+        st.subheader("1. Select Version")
+        selected_version = st.radio(
+            "Choose the version you'd like to use as a base:",
+            ["Version 1", "Version 2", "Version 3"],
+            help="Select the version that best matches your needs for further enhancement",
+            key="version_selector"
+        )
         
-            # Version selection and feedback
-            st.markdown("### 🔄 Version Selection & Feedback")
-            
-            feedback_col1, feedback_col2 = st.columns([1, 2])
-            
-            with feedback_col1:
-                st.subheader("Select Version")
-                selected_version = st.radio(
-                    "Choose the version you'd like to use as a base:",
-                    ["Version 1", "Version 2", "Version 3"],
-                    help="Select the version that best matches your needs for further enhancement",
-                    key="version_selector"
-                )
-                
-                # Get selected version index
-                selected_index = int(selected_version[-1]) - 1
-                
-                # Display previous feedback if available
-                if logger.current_state["feedback_history"]:
-                    st.subheader("Previous Feedback")
-                    with st.expander("View Previous Feedback", expanded=False):
-                        for i, feedback in enumerate(logger.current_state["feedback_history"], 1):
-                            if isinstance(feedback, dict):
-                                feedback_text = feedback.get("feedback", "")
-                                st.markdown(f"**#{i}:**")
-                                st.markdown(f"> {feedback_text}")
-                                st.markdown("---")
-                            else:
-                                st.markdown(f"**#{i}:**")
-                                st.markdown(f"> {feedback}")
-                                st.markdown("---")
-                
-            with feedback_col2:
-                st.subheader("Provide Feedback")
-                # Handle feedback clearing mechanism
-                if st.session_state.get('clear_feedback', False):
-                    st.session_state.clear_feedback = False
-                    
-                st.write("Enter your suggestions for improving the selected version:")
-                
-                user_feedback = st.text_area(
-                    "Feedback",
-                    height=150,
-                    placeholder="E.g., 'Add more emphasis on leadership skills', 'Include cloud technologies', 'Remove references to specific programming languages', etc.",
-                    key="user_feedback",
-                    help="Be specific about what you'd like to change or improve"
-                )
-                
-                # Add divider before feedback file option
-                st.markdown("--- OR ---")
-                
-                # Option to select feedback from file
-                st.write("Select feedback from a file:")
-                
-                # Create tabs for selecting from directory or uploading
-                feedback_tabs = st.tabs(["Select from Feedbacks Folder", "Upload Feedback File"])
-                
-                feedback_from_file = None
-                
-                with feedback_tabs[0]:
-                    # Select from Feedbacks folder
-                    feedback_directory = os.path.join(os.getcwd(), "Feedbacks")
-                    
-                    # Check if directory exists
-                    if not os.path.exists(feedback_directory):
-                        st.warning("The 'Feedbacks' directory does not exist. Please create it or upload a file directly.")
+        # Get selected version index
+        selected_index = int(selected_version[-1]) - 1
+        
+        # Display the selected version
+        st.text_area(
+            f"Selected Version Content",
+            st.session_state.enhanced_versions[selected_index],
+            height=250,
+            disabled=True,
+            key=f"selected_version_display"
+        )
+        
+        # Display previous feedback if available
+        if logger.current_state["feedback_history"]:
+            st.subheader("Previous Feedback")
+            with st.expander("View Previous Feedback", expanded=True):
+                for i, feedback in enumerate(logger.current_state["feedback_history"], 1):
+                    if isinstance(feedback, dict):
+                        feedback_text = feedback.get("feedback", "")
+                        feedback_type = feedback.get("type", "General Feedback")
+                        st.markdown(f"**#{i} - {feedback_type}:**")
+                        st.markdown(f"> {feedback_text}")
+                        st.markdown("---")
                     else:
-                        # Get all .txt and .docx files from the Feedbacks folder
-                        feedback_files = [f for f in os.listdir(feedback_directory) 
-                                         if f.endswith(('.txt', '.docx'))]
-                        
-                        if not feedback_files:
-                            st.warning("No feedback files found in the Feedbacks directory. Please add .txt or .docx files.")
-                        else:
-                            # Allow user to select a feedback file
-                            selected_feedback_file = st.selectbox(
-                                "Select Feedback File",
-                                feedback_files,
-                                help="Choose a feedback file to process"
-                            )
-                            
-                            if selected_feedback_file:
-                                feedback_path = os.path.join(feedback_directory, selected_feedback_file)
-                                
-                                # Extract text based on file type
-                                try:
-                                    if selected_feedback_file.endswith('.txt'):
-                                        with open(feedback_path, 'r', encoding='utf-8') as file:
-                                            feedback_from_file = file.read()
-                                    elif selected_feedback_file.endswith('.docx'):
-                                        doc = Document(feedback_path)
-                                        feedback_from_file = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-                                    
-                                    # Display the feedback content
-                                    st.text_area(
-                                        "Feedback Content",
-                                        feedback_from_file,
-                                        height=100,
-                                        disabled=True
-                                    )
-                                except Exception as e:
-                                    st.error(f"Error reading feedback file: {str(e)}")
+                        st.markdown(f"**#{i}:**")
+                        st.markdown(f"> {feedback}")
+                        st.markdown("---")
+    
+    # In the right column, show the feedback input and submission options
+    with right_col:
+        st.subheader("2. Provide Feedback")
+        
+        # Define feedback type options
+        feedback_types = ["General Feedback", "Rejected Candidate", "Hiring Manager Feedback", 
+                         "Client Feedback", "Selected Candidate", "Interview Feedback"]
+        
+        # Select feedback type
+        selected_feedback_type = st.selectbox(
+            "Feedback Type:",
+            options=feedback_types,
+            index=feedback_types.index(st.session_state.feedback_type) if st.session_state.feedback_type in feedback_types else 0,
+            key="feedback_type_selector"
+        )
+        
+        # Handle feedback clearing mechanism
+        if st.session_state.get('clear_feedback', False):
+            st.session_state.clear_feedback = False
+        
+        # Input for manual feedback
+        user_feedback = st.text_area(
+            "Enter your suggestions for improving the selected version:",
+            height=150,
+            placeholder="E.g., 'Add more emphasis on leadership skills', 'Include cloud technologies', 'Remove references to specific programming languages', etc.",
+            key="user_feedback",
+            help="Be specific about what you'd like to change or improve"
+        )
+        
+        # Add divider before feedback file option
+        st.markdown("--- OR ---")
+        
+        # Option to select feedback from file
+        st.write("Select feedback from a file:")
+        
+        # Create tabs for selecting from directory or uploading
+        feedback_tabs = st.tabs(["Select from Feedbacks Folder", "Upload Feedback File"])
+        
+        feedback_from_file = None
+        file_feedback_type = selected_feedback_type
+        
+        with feedback_tabs[0]:
+            # Select from Feedbacks folder
+            feedback_directory = os.path.join(os.getcwd(), "Feedbacks")
+            
+            # Check if directory exists
+            if not os.path.exists(feedback_directory):
+                st.warning("The 'Feedbacks' directory does not exist. Please create it or upload a file directly.")
+            else:
+                # Get all .txt and .docx files from the Feedbacks folder
+                feedback_files = [f for f in os.listdir(feedback_directory) 
+                               if f.endswith(('.txt', '.docx'))]
                 
-                with feedback_tabs[1]:
-                    # Upload file option
-                    uploaded_feedback = st.file_uploader(
-                        "Upload Feedback File",
-                        type=['txt', 'docx'],
-                        help="Upload a .txt or .docx file containing feedback"
+                if not feedback_files:
+                    st.warning("No feedback files found in the Feedbacks directory. Please add .txt or .docx files.")
+                else:
+                    # Allow user to select a feedback file
+                    selected_feedback_file = st.selectbox(
+                        "Select Feedback File",
+                        feedback_files,
+                        help="Choose a feedback file to process"
                     )
                     
-                    if uploaded_feedback:
+                    # Select feedback type for file
+                    file_feedback_type = st.selectbox(
+                        "File Feedback Type:",
+                        options=feedback_types,
+                        index=feedback_types.index(selected_feedback_type),
+                        key="file_feedback_type"
+                    )
+                    
+                    if selected_feedback_file:
+                        feedback_path = os.path.join(feedback_directory, selected_feedback_file)
+                        
+                        # Extract text based on file type
                         try:
-                            # Extract text based on file type
-                            if uploaded_feedback.name.endswith('.txt'):
-                                feedback_from_file = uploaded_feedback.getvalue().decode('utf-8')
-                            elif uploaded_feedback.name.endswith('.docx'):
-                                # Save to temporary file to use python-docx
-                                temp_path = f"temp_{uploaded_feedback.name}"
-                                with open(temp_path, 'wb') as f:
-                                    f.write(uploaded_feedback.getvalue())
-                                
-                                doc = Document(temp_path)
+                            if selected_feedback_file.endswith('.txt'):
+                                with open(feedback_path, 'r', encoding='utf-8') as file:
+                                    feedback_from_file = file.read()
+                            elif selected_feedback_file.endswith('.docx'):
+                                doc = Document(feedback_path)
                                 feedback_from_file = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-                                
-                                # Clean up temp file
-                                if os.path.exists(temp_path):
-                                    os.remove(temp_path)
                             
                             # Display the feedback content
                             st.text_area(
@@ -1035,217 +1103,346 @@ def main():
                                 disabled=True
                             )
                         except Exception as e:
-                            st.error(f"Error processing uploaded file: {str(e)}")
-                
-                # Create a row for feedback action buttons
-                feedback_btn_col1, feedback_btn_col2, feedback_btn_col3 = st.columns(3)
-                
-                with feedback_btn_col1:
-                    # Add a button to save manual feedback without generating final version
-                    if st.button("Add Manual Feedback", type="secondary", key="add_feedback_only"):
-                        if user_feedback.strip():
-                            # Add to the logger's feedback history directly as a string
-                            logger.current_state["feedback_history"].append(user_feedback)
-                            
-                            # Save the updated state
-                            logger._save_state()
-                            
-                            # Add to session state for UI update
-                            if 'feedback_history' not in st.session_state:
-                                st.session_state.feedback_history = []
-                            st.session_state.feedback_history.append(user_feedback)
-                            
-                            # Log the action
-                            logger.current_state["actions"].append({
-                                "action": "feedback",
-                                "timestamp": datetime.datetime.now().isoformat(),
-                                "index": len(logger.current_state["feedback_history"]) - 1
-                            })
-                            logger._save_state()
-                            
-                            # Clear feedback input
-                            st.session_state.clear_feedback = True
-                            st.success("Feedback added successfully! You can add more feedback or generate the final version when ready.")
-                            st.rerun()
-                        else:
-                            st.warning("Please enter some feedback first.")
-                
-                with feedback_btn_col2:
-                    # Add a button to use feedback from file
-                    if st.button("Add File Feedback", type="secondary", key="add_file_feedback"):
-                        if feedback_from_file:
-                            # Add to the logger's feedback history directly
-                            logger.current_state["feedback_history"].append(feedback_from_file)
-                            
-                            # Save the updated state
-                            logger._save_state()
-                            
-                            # Add to session state for UI update
-                            if 'feedback_history' not in st.session_state:
-                                st.session_state.feedback_history = []
-                            st.session_state.feedback_history.append(feedback_from_file)
-                            
-                            # Log the action
-                            logger.current_state["actions"].append({
-                                "action": "feedback",
-                                "timestamp": datetime.datetime.now().isoformat(),
-                                "index": len(logger.current_state["feedback_history"]) - 1
-                            })
-                            logger._save_state()
-                            
-                            st.success("File feedback added successfully!")
-                            st.rerun()
-                        else:
-                            st.warning("Please select or upload a feedback file first.")
-                
-                with feedback_btn_col3:
-                    # View all feedback button
-                    if st.button("View All Feedback", type="secondary", key="view_all_feedback"):
-                        st.session_state['viewing_all_feedback'] = True
+                            st.error(f"Error reading feedback file: {str(e)}")
+        
+        with feedback_tabs[1]:
+            # Upload file option
+            uploaded_feedback = st.file_uploader(
+                "Upload Feedback File",
+                type=['txt', 'docx'],
+                help="Upload a .txt or .docx file containing feedback"
+            )
             
-            # Display all feedback if requested
-            if st.session_state.get('viewing_all_feedback', False):
-                st.markdown("### 📋 All Feedback History")
-                display_filtered_feedback_history()
-                # Reset viewing flag after displaying
-                st.session_state['viewing_all_feedback'] = False
+            # Select feedback type for uploaded file
+            upload_feedback_type = st.selectbox(
+                "Uploaded File Feedback Type:",
+                options=feedback_types,
+                index=feedback_types.index(selected_feedback_type),
+                key="upload_feedback_type"
+            )
             
-            # Final enhancement process section
-            st.markdown("### 🚀 Generate Final Version")
-            
-            final_col1, final_col2 = st.columns(2)
-                
-            with final_col1:
-                current_feedback_count = len(logger.current_state['feedback_history'])
-                current_btn_label = f"Generate Final Version ({current_feedback_count} feedback items)"
-                if st.button(current_btn_label, type="primary", key="generate_current_feedback"):
-                    try:
-                        with st.spinner("Creating final version with feedback... This may take a moment"):
-                            # Log version selection
-                            logger.log_version_selection(selected_index)
-                                
-                            # Log new feedback if provided and not already added
-                            if user_feedback.strip():
-                                # Add to the logger's feedback history directly
-                                logger.current_state["feedback_history"].append(user_feedback)
-                                
-                                # Save the updated state
-                                logger._save_state()
-                                
-                                # Log the action
-                                logger.current_state["actions"].append({
-                                    "action": "feedback",
-                                    "timestamp": datetime.datetime.now().isoformat(),
-                                    "index": len(logger.current_state["feedback_history"]) - 1
-                                })
-                                logger._save_state()
-                                
-                                # Clear feedback input
-                                st.session_state.clear_feedback = True
-                                
-                            # Use the current enhanced version if it exists, otherwise use selected version
-                            base_description = (logger.current_state["current_enhanced_version"] or 
-                                                st.session_state.enhanced_versions[selected_index])
-                                
-                            # Create list of feedback from current session only
-                            feedback_list = logger.current_state["feedback_history"]
-                                
-                            # Generate final description using current session feedback
-                            final_description = agent.generate_final_description(
-                                base_description,
-                                feedback_list
-                            )
-                                
-                            # Log the new enhanced version
-                            logger.log_enhanced_version(final_description, is_final=True)
-                                
-                            # Store the new enhanced version in session state
-                            st.session_state.current_enhanced_version = final_description
-                                
-                            # Flag that we generated the final version
-                            st.session_state.final_version_generated = True
-                            st.session_state.final_version = final_description
-                                
-                            st.success("Final version generated successfully!")
-                            st.rerun()
-                                
-                    except Exception as e:
-                        st.error(f"An error occurred: {str(e)}")
-                        st.error("Please try again or contact support if the problem persists.")
-                
-            with final_col2:
-                st.caption("""
-                Generate the final enhanced version based on your selected template and feedback. The AI will 
-                incorporate all feedback items to create an optimized job description that meets your requirements.
-                """)
-                
-            # Display final version if it was generated
-            if st.session_state.get('final_version_generated', False) and st.session_state.get('final_version'):
-                final_description = st.session_state.final_version
+            if uploaded_feedback:
+                try:
+                    # Extract text based on file type
+                    if uploaded_feedback.name.endswith('.txt'):
+                        feedback_from_file = uploaded_feedback.getvalue().decode('utf-8')
+                    elif uploaded_feedback.name.endswith('.docx'):
+                        # Save to temporary file to use python-docx
+                        temp_path = f"temp_{uploaded_feedback.name}"
+                        with open(temp_path, 'wb') as f:
+                            f.write(uploaded_feedback.getvalue())
+                        
+                        doc = Document(temp_path)
+                        feedback_from_file = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+                        
+                        # Clean up temp file
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
                     
-                # Display final version with clear separation
-                st.markdown("---")
-                st.markdown("### ✅ Final Enhanced Job Description")
-                
-                # Create a container with a border for the final version
-                final_container = st.container(border=True)
-                with final_container:
+                    # Use the feedback type from the upload section
+                    file_feedback_type = upload_feedback_type
+                    
+                    # Display the feedback content
                     st.text_area(
-                        "Final Content",
-                        final_description,
-                        height=400,
-                        key="final_description"
+                        "Feedback Content",
+                        feedback_from_file,
+                        height=100,
+                        disabled=True
                     )
+                except Exception as e:
+                    st.error(f"Error processing uploaded file: {str(e)}")
+        
+        # Create a row for feedback action buttons
+        feedback_btn_col1, feedback_btn_col2, feedback_btn_col3 = st.columns(3)
+        
+        with feedback_btn_col1:
+            # Add a button to save manual feedback without generating final version
+            if st.button("Add Manual Feedback", type="secondary", key="add_feedback_only"):
+                if user_feedback.strip():
+                    # Create feedback object with type
+                    feedback_obj = {
+                        "feedback": user_feedback,
+                        "type": selected_feedback_type,
+                        "role": st.session_state.role
+                    }
                     
-                # Add final version to scores dictionary for comparison
-                final_scores = analyzer.analyze_text(final_description)
-                all_scores['Final'] = final_scores
+                    # Add to the logger's feedback history directly
+                    logger.current_state["feedback_history"].append(feedback_obj)
                     
-                # Create comparison section
-                st.markdown("### 📊 Final Analysis")
-                
-                final_col1, final_col2 = st.columns([1, 1])
+                    # Save the updated state
+                    logger._save_state()
                     
-                with final_col1:
-                    final_radar = create_multi_radar_chart({'Original': original_scores, 'Final': final_scores})
-                    st.plotly_chart(final_radar, use_container_width=True, key="final_radar")
+                    # Add to session state for UI update
+                    if 'feedback_history' not in st.session_state:
+                        st.session_state.feedback_history = []
+                    st.session_state.feedback_history.append(feedback_obj)
                     
-                with final_col2:
-                    # Create a simplified comparison for final vs original
-                    final_comparison_df = create_comparison_dataframe({'Original': original_scores, 'Final': final_scores})
-                    st.dataframe(
-                        final_comparison_df,
-                        height=400,
-                        use_container_width=True,
-                        hide_index=True,
-                        key="final_comparison"
+                    # Log the action
+                    logger.current_state["actions"].append({
+                        "action": "feedback",
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "index": len(logger.current_state["feedback_history"]) - 1
+                    })
+                    logger._save_state()
+                    
+                    # Clear feedback input
+                    st.session_state.clear_feedback = True
+                    st.success("Feedback added successfully! You can add more feedback or generate the final version when ready.")
+                    st.rerun()
+                else:
+                    st.warning("Please enter some feedback first.")
+        
+        with feedback_btn_col2:
+            # Add a button to use feedback from file
+            if st.button("Add File Feedback", type="secondary", key="add_file_feedback"):
+                if feedback_from_file:
+                    # Create feedback object with type
+                    feedback_obj = {
+                        "feedback": feedback_from_file,
+                        "type": file_feedback_type,
+                        "role": st.session_state.role
+                    }
+                    
+                    # Add to the logger's feedback history directly
+                    logger.current_state["feedback_history"].append(feedback_obj)
+                    
+                    # Save the updated state
+                    logger._save_state()
+                    
+                    # Add to session state for UI update
+                    if 'feedback_history' not in st.session_state:
+                        st.session_state.feedback_history = []
+                    st.session_state.feedback_history.append(feedback_obj)
+                    
+                    # Log the action
+                    logger.current_state["actions"].append({
+                        "action": "feedback",
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "index": len(logger.current_state["feedback_history"]) - 1
+                    })
+                    logger._save_state()
+                    
+                    st.success("File feedback added successfully!")
+                    st.rerun()
+                else:
+                    st.warning("Please select or upload a feedback file first.")
+        
+        with feedback_btn_col3:
+            # View all feedback button
+            if st.button("View All Feedback", type="secondary", key="view_all_feedback"):
+                st.session_state['viewing_all_feedback'] = True
+    
+    # Display all feedback if requested
+    if st.session_state.get('viewing_all_feedback', False):
+        st.markdown("### 📋 All Feedback History")
+        display_filtered_feedback_history()
+        # Reset viewing flag after displaying
+        st.session_state['viewing_all_feedback'] = False
+    
+    # Final enhancement process section
+    st.markdown("### 🚀 Generate Final Version")
+    
+    final_col1, final_col2 = st.columns(2)
+        
+    with final_col1:
+        current_feedback_count = len(logger.current_state['feedback_history'])
+        current_btn_label = f"Generate Final Version ({current_feedback_count} feedback items)"
+        if st.button(current_btn_label, type="primary", key="generate_current_feedback"):
+            try:
+                with st.spinner("Creating final version with feedback... This may take a moment"):
+                    # Log version selection
+                    logger.log_version_selection(selected_index)
+                        
+                    # Log new feedback if provided and not already added
+                    if user_feedback.strip():
+                        # Create feedback object with type
+                        feedback_obj = {
+                            "feedback": user_feedback,
+                            "type": selected_feedback_type,
+                            "role": st.session_state.role
+                        }
+                        
+                        # Add to the logger's feedback history directly
+                        logger.current_state["feedback_history"].append(feedback_obj)
+                        
+                        # Save the updated state
+                        logger._save_state()
+                        
+                        # Log the action
+                        logger.current_state["actions"].append({
+                            "action": "feedback",
+                            "timestamp": datetime.datetime.now().isoformat(),
+                            "index": len(logger.current_state["feedback_history"]) - 1
+                        })
+                        logger._save_state()
+                        
+                        # Clear feedback input
+                        st.session_state.clear_feedback = True
+                        
+                    # Use the current enhanced version if it exists, otherwise use selected version
+                    base_description = (logger.current_state["current_enhanced_version"] or 
+                                        st.session_state.enhanced_versions[selected_index])
+                        
+                    # Generate final description using current session feedback
+                    final_description = agent.generate_final_description(
+                        base_description,
+                        logger.current_state["feedback_history"]
                     )
-                    
-                # Download section
-                st.markdown("### 📥 Download Options")
-                
-                download_col1, download_col2 = st.columns(2)
-                    
-                with download_col1:
-                    st.download_button(
-                        label="Download as TXT",
-                        data=final_description,
-                        file_name=f"enhanced_jd_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                        mime="text/plain",
-                        key="download_txt"
-                    )
-                    # Log download action
-                    logger.log_download("txt", f"enhanced_jd_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
-                    
-                with download_col2:
-                    if st.button("Download as DOCX", key="download_docx"):
-                        docx_filename = f"enhanced_jd_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-                        save_enhanced_jd(final_description, docx_filename, 'docx')
-                        st.success(f"Saved as {docx_filename}")
-                        # Log download action
-                        logger.log_download("docx", docx_filename)
+                        
+                    # Log the new enhanced version
+                    logger.log_enhanced_version(final_description, is_final=True)
+                        
+                    # Store the new enhanced version in session state
+                    st.session_state.current_enhanced_version = final_description
+                        
+                    # Flag that we generated the final version
+                    st.session_state.final_version_generated = True
+                    st.session_state.final_version = final_description
+                        
+                    st.success("Final version generated successfully!")
+                    st.rerun()
+                        
+            except Exception as e:
+                st.error(f"An error occurred: {str(e)}")
+                st.error("Please try again or contact support if the problem persists.")
+        
+    with final_col2:
+        st.caption("""
+        Generate the final enhanced version based on your selected template and all feedback provided. 
+        The AI will incorporate all feedback items to create an optimized job description that meets your requirements.
+        """)
+        
+    # Display final version if it was generated
+    if st.session_state.get('final_version_generated', False) and st.session_state.get('final_version'):
+        final_description = st.session_state.final_version
+            
+        # Display final version with clear separation
+        st.markdown("---")
+        st.markdown("### ✅ Final Enhanced Job Description")
+        
+        # Create a container with a border for the final version
+        final_container = st.container(border=True)
+        with final_container:
+            st.text_area(
+                "Final Content",
+                final_description,
+                height=400,
+                key="final_description"
+            )
+            
+        # Add final version to scores dictionary for comparison
+        original_scores = analyzer.analyze_text(st.session_state.original_jd)
+        final_scores = analyzer.analyze_text(final_description)
+        
+        # Create comparison section
+        st.markdown("### 📊 Final Analysis")
+        
+        final_col1, final_col2 = st.columns([1, 1])
+            
+        with final_col1:
+            final_radar = create_multi_radar_chart({'Original': original_scores, 'Final': final_scores})
+            st.plotly_chart(final_radar, use_container_width=True, key="final_radar")
+            
+        with final_col2:
+            # Create a simplified comparison for final vs original
+            final_comparison_df = create_comparison_dataframe({'Original': original_scores, 'Final': final_scores})
+            st.dataframe(
+                final_comparison_df,
+                height=400,
+                use_container_width=True,
+                hide_index=True,
+                key="final_comparison"
+            )
+            
+        # Download section
+        st.markdown("### 📥 Download Options")
+        
+        download_col1, download_col2 = st.columns(2)
+            
+        with download_col1:
+            st.download_button(
+                label="Download as TXT",
+                data=final_description,
+                file_name=f"enhanced_jd_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                mime="text/plain",
+                key="download_txt"
+            )
+            # Log download action
+            logger.log_download("txt", f"enhanced_jd_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+            
+        with download_col2:
+            if st.button("Download as DOCX", key="download_docx"):
+                docx_filename = f"enhanced_jd_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+                save_enhanced_jd(final_description, docx_filename, 'docx')
+                st.success(f"Saved as {docx_filename}")
+                # Log download action
+                logger.log_download("docx", docx_filename)
 
-    # Footer with attribution, version, and additional download options
+def main():
+    # Use a clean Streamlit theme
+    st.set_page_config(
+        page_title="Job Description Enhancer",
+        page_icon="💼",
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
+
+    # Initialize session state
+    init_session_state()
+    
+    # Get or create logger
+    logger = get_or_create_logger()
+    
+    # Clean up old logs in the background
+    cleanup_old_logs()
+
+    # Display header with title and role selector in same row
+    st.markdown("<h1 style='text-align: center;'>💼 Job Description Enhancer</h1>", unsafe_allow_html=True)
+    
+    # Display help button in the top right
+    help_col, title_col = st.columns([1, 5])
+    with help_col:
+        display_help_section()
+    
+    # Space before role selector
+    st.write("")
+
+    # Render role selector
+    render_role_selector()
+    
+    # Session management in a cleaner horizontal layout
+    session_col1, session_col2, session_col3 = st.columns(3)
+    
+    with session_col1:
+        st.button("🔄 Start New Session", on_click=start_new_session)
+        
+    with session_col2:
+        st.caption(f"Current Session ID: {logger.session_id[:8]}...")
+        st.caption(f"Role: {logger.username}")
+        
+    with session_col3:
+        if logger.current_state["actions"]:
+            st.caption(f"Actions in this session: {len(logger.current_state['actions'])}")
+            if logger.current_state["selected_file"]:
+                st.caption(f"Working with: {logger.current_state['selected_file']}")
+    
+    # Add a separator
+    st.markdown("---")
+
+    # Initialize the analyzer and agent
+    analyzer = JobDescriptionAnalyzer()
+    agent = JobDescriptionAgent(model_id="anthropic.claude-3-haiku-20240307-v1:0")
+    
+    if 'final_version' not in st.session_state:
+        st.session_state.final_version = None
+    
+    # Render the appropriate page based on current_page state
+    if st.session_state.current_page == "generate":
+        render_generation_page(logger, analyzer, agent)
+    else:  # "refine"
+        render_refinement_page(logger, analyzer, agent)
+    
+    # Footer with export options
     st.markdown("---")
     
     # Add simplified export options
@@ -1286,8 +1483,10 @@ def main():
                                     # Parse feedback content
                                     if isinstance(feedback, dict):
                                         feedback_text = feedback.get("feedback", "")
+                                        feedback_type = feedback.get("type", "General Feedback")
                                     else:
                                         feedback_text = feedback
+                                        feedback_type = "General Feedback"
                                     
                                     # Add row to CSV data
                                     csv_data.append({
@@ -1295,6 +1494,7 @@ def main():
                                         "Role": role,
                                         "File": file_name,
                                         "Timestamp": timestamp,
+                                        "Feedback Type": feedback_type,
                                         "Feedback": feedback_text
                                     })
                     
