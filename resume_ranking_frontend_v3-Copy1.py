@@ -120,7 +120,7 @@ def preprocess(text):
 def load_job_data():
     """Load and prepare the job descriptions data."""
     try:
-        job_df = pd.read_csv('/Users/raghav/Desktop/Apexon/JD Optimization/job_descriptions_analysis_output_new_v.csv')
+        job_df = pd.read_csv('/Users/Vasu/Documents/GitHub/Resume-Ranking-by-JDs/job_descriptions_analysis_output.csv')
         
         # Initialize all JD types to 'unknown'
         job_df['JD_Type'] = 'unknown'
@@ -153,9 +153,9 @@ def load_resume_data(jd_type):
     """Load the appropriate resume data based on the JD type."""
     try:
         if jd_type == 'java_developer':
-            resume_df = pd.read_csv('/Users/raghav/Desktop/Apexon/JD Optimization/resumes_analysis_outputJDJavaDeveloper.csv')
+            resume_df = pd.read_csv('/Users\Vasu\Documents\GitHub\Resume-Ranking-by-JDs\Exctracted Resumes/resumes_analysis_outputJDJavaDeveloper.csv')
         elif jd_type == 'principal_engineer':
-            resume_df = pd.read_csv('/Users/raghav/Desktop/Apexon/JD Optimization/resumes_analysis_output_JDPrincipalSoftwareEngineer.csv')
+            resume_df = pd.read_csv('/Users\Vasu\Documents\GitHub\Resume-Ranking-by-JDs\Exctracted Resumes/resumes_analysis_output_JDPrincipalSoftwareEngineer.csv')
         else:
             # Instead of falling back to All_Resumes.csv, show an error
             st.error(f"No resume data available for job type: {jd_type}")

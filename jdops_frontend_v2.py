@@ -87,8 +87,8 @@ class JobDescriptionAgent:
         # SECURITY: Replace hardcoded credentials with proper credential management
         self.client = boto3.client(
                 service_name='bedrock-runtime',
-                aws_access_key_id='',
-                aws_secret_access_key='',
+                aws_access_key_id='AKIAU7RXSND3API7ROMH',
+                aws_secret_access_key='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',
                 region_name='us-east-1',
             )
 
@@ -688,8 +688,8 @@ def process_jd_with_feedback(job_description, user_feedback):
     """Process job description with feedback to generate an enhanced version."""
     try:
         # Initialize AWS Bedrock Client
-        aws_access_key = ""
-        aws_secret_access_key = ""
+        aws_access_key = "AKIAU7RXSND3API7ROMH"
+        aws_secret_access_key = "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"
         aws_region = "us-east-1"
         bedrock = boto3.client(
             service_name="bedrock-runtime",
