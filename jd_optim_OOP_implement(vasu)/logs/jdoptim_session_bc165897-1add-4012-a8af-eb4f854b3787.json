@@ -1,0 +1,26 @@
+{
+  "session_id": "bc165897-1add-4012-a8af-eb4f854b3787",
+  "username": "Recruiter",
+  "session_start_time": "2025-03-31T15:45:04.299321",
+  "selected_file": "Job Description - Java Developer - Health Care.txt",
+  "original_jd": "Job Description \u2013 Java Developer \n\nInitial JD from Client \n\nPure backend java , backlogging , log analyze,  restful services,  spring ,spring security , spring boot ,Microservices \n\n ",
+  "enhanced_versions": [],
+  "selected_version": null,
+  "feedback_history": [],
+  "current_enhanced_version": null,
+  "final_version": null,
+  "actions": [
+    {
+      "action": "file_selected",
+      "file_name": "DataAnalyticsAIMLJD (1).txt",
+      "username": "Recruiter",
+      "timestamp": "2025-03-31T15:45:04.308289"
+    },
+    {
+      "action": "file_selected",
+      "file_name": "Job Description - Java Developer - Health Care.txt",
+      "username": "Recruiter",
+      "timestamp": "2025-03-31T15:48:36.441894"
+    }
+  ]
+}

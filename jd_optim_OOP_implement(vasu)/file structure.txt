@@ -1,0 +1,28 @@
+
+
+jd_optim/
+│
+├── app.py                          # Main application entrypoint
+├── config.py                       # Configuration and settings
+│
+├── utils/
+│   ├── __init__.py
+│   ├── file_utils.py               # File reading/writing utilities
+│   ├── text_processing.py          # Text processing utilities
+│   └── visualization.py            # Data visualization functions
+│
+├── models/
+│   ├── __init__.py
+│   ├── job_description_analyzer.py # JD analysis logic
+│   ├── job_description_agent.py    # AI enhancement agent
+│   └── resume_analyzer.py          # Resume analysis logic
+│
+├── ui/
+│   ├── __init__.py
+│   ├── common.py                   # Common UI elements
+│   ├── jd_enhance.py               # JD enhancement UI
+│   ├── jd_refine.py                # JD refinement UI
+│   ├── candidate_ranking.py        # Candidate ranking UI
+│   └── interview_prep.py           # Interview prep UI
+│
+└── jdoptim_logger.py               # Existing  helper logger class

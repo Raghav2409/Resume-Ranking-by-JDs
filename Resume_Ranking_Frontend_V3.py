@@ -9,6 +9,7 @@ from nltk.stem import WordNetLemmatizer
 from openai import OpenAI
 import plotly.graph_objects as go
 import plotly.express as px
+import os
 
 # Set page configuration
 st.set_page_config(
@@ -91,7 +92,8 @@ st.markdown("""
 # Initialize OpenAI client
 
 # Initialize OpenAI client
-client = OpenAI(api_key="<key>")
+api_key = os.environ.get("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
 
 # Download NLTK data
 @st.cache_resource
