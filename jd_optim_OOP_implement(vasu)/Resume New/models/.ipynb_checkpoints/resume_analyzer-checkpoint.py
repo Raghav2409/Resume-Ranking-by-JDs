@@ -1,11 +1,9 @@
 import os
 import numpy as np
 import pandas as pd
-import tempfile
 import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from docx import Document
 from utils.text_processing import extract_skills, preprocess_text
 
 class ResumeAnalyzer:
@@ -191,84 +189,25 @@ class ResumeAnalyzer:
             }
             return pd.DataFrame(sample_resume_data)
     
-    def analyze_uploaded_resume(self, uploaded_file):
+    def get_resume_details(self, resume_id, resume_df):
         """
-        Analyze a user-uploaded resume (.docx) and return the extracted information.
+        Get detailed information about a specific resume
         
         Args:
-            uploaded_file (UploadedFile): The uploaded resume file
+            resume_id (str): ID of the resume to retrieve
+            resume_df (DataFrame): DataFrame containing resume data
             
         Returns:
-            dict: Dictionary with extracted resume details
+            dict: Dictionary with resume details
         """
-        # Only process .docx files
-        if not uploaded_file.name.endswith(".docx"):
-            raise ValueError(f"Unsupported file format for {uploaded_file.name}. Only .docx files are supported.")
-        
-        # Write the uploaded file to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
-            tmp.write(uploaded_file.getvalue())
-            tmp_path = tmp.name
-        
         try:
-            # Extract text from the document
-            doc = Document(tmp_path)
-            resume_text = "\n".join([para.text for para in doc.paragraphs])
-            
-            # Basic extraction - in a real implementation, you would use NLP or an LLM
-            # to extract these details more accurately
-            skills = extract_skills(resume_text)
-            skills_str = ", ".join([item for sublist in skills.values() for item in sublist])
-            
-            # Just as a simple example - detecting tools is more complex in reality
-            tools_keywords = ['git', 'docker', 'kubernetes', 'jenkins', 'jira', 
-                             'confluence', 'aws', 'azure', 'vs code', 'intellij']
-            detected_tools = []
-            for tool in tools_keywords:
-                if tool.lower() in resume_text.lower():
-                    detected_tools.append(tool)
-            
-            # Similarly, certifications would need better extraction
-            cert_keywords = ['certified', 'certification', 'certificate', 'aws', 'azure', 
-                           'google', 'professional', 'associate', 'expert']
-            has_cert = any(kw in resume_text.lower() for kw in cert_keywords)
-            
+            resume = resume_df[resume_df['File Name'] == resume_id].iloc[0]
             return {
-                'File Name': uploaded_file.name,
-                'Skills': skills_str or "General programming, problem-solving",
-                'Tools': ", ".join(detected_tools) or "Standard development tools",
-                'Certifications': "Certifications detected" if has_cert else "None specified"
+                'Resume ID': resume_id,
+                'Skills': resume['Skills'],
+                'Tools': resume['Tools'],
+                'Certifications': resume['Certifications'],
+                'Additional Info': resume.get('Additional Expertise', '')
             }
-        except Exception as e:
-            print(f"Error in analyze_uploaded_resume for {uploaded_file.name}: {e}")
+        except:
             return None
-        finally:
-            # Always remove the temporary file
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-    
-    def process_resume_pool(self, uploaded_files):
-        """
-        Process a batch of uploaded resume files and return a DataFrame
-        
-        Args:
-            uploaded_files (list): List of uploaded resume files
-            
-        Returns:
-            DataFrame: DataFrame containing processed resume data
-        """
-        processed_resumes = []
-        for uploaded_file in uploaded_files:
-            try:
-                if uploaded_file.name.endswith(".docx"):
-                    resume_data = self.analyze_uploaded_resume(uploaded_file)
-                    if resume_data is not None:
-                        processed_resumes.append(resume_data)
-                else:
-                    print(f"Skipping {uploaded_file.name} - not a .docx file")
-            except Exception as e:
-                print(f"Error processing {uploaded_file.name}: {e}")
-        
-        if processed_resumes:
-            return pd.DataFrame(processed_resumes)
-        return None

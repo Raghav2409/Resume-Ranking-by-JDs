@@ -131,9 +131,8 @@ custom_css = """
 </style>
 """
 
-# AWS API credentials accessed from Streamlit secrets
+# AWS API credentials - properly formatted as a dictionary
 AWS_CREDENTIALS = {
     "access_key": st.secrets["aws"]["access_key"] if "aws" in st.secrets else "",
     "secret_key": st.secrets["aws"]["secret_key"] if "aws" in st.secrets else "",
     "region": st.secrets["aws"]["region"] if "aws" in st.secrets else "us-east-1"
-}

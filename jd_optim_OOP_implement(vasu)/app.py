@@ -12,8 +12,7 @@ from jdoptim_logger import JDOptimLogger
 
 # Import UI components
 from ui.common import render_header, render_role_selector, render_tabs, switch_tab, switch_page
-from ui.jd_enhance import render_jd_enhance_page
-from ui.jd_refine import render_jd_refine_page
+from ui.jd_optimization import render_jd_optimization_page  # New unified page
 from ui.candidate_ranking import render_candidate_ranking_page
 from ui.interview_prep import render_interview_prep_page
 from ui.client_feedback import render_client_feedback_page
@@ -57,13 +56,17 @@ def init_session_state():
         st.session_state.feedback_type = "General Feedback"
         
     if 'active_tab' not in st.session_state:
-        st.session_state.active_tab = "JD Versions"
+        st.session_state.active_tab = "JD Optimization"
         
     if 'analysis_results' not in st.session_state:
         st.session_state.analysis_results = None
         
     if 'ranked_candidates' not in st.session_state:
         st.session_state.ranked_candidates = []
+        
+    # Resume pool handling
+    if 'resume_pools' not in st.session_state:
+        st.session_state.resume_pools = []
         
     # Client feedback tab specific state
     if 'client_jd' not in st.session_state:
@@ -136,15 +139,9 @@ def main():
     analyzer = JobDescriptionAnalyzer()
     agent = JobDescriptionAgent(model_id="anthropic.claude-3-haiku-20240307-v1:0")
     
-    # Render the appropriate content based on active tab
-    if st.session_state.active_tab == "JD Versions":
-        # For JD Versions tab, render either the enhance or refine page based on current state
-        if st.session_state.current_page == "jd_enhance":
-            render_jd_enhance_page(logger, analyzer, agent)
-        else:  # "jd_refine"
-            render_jd_refine_page(logger, analyzer, agent)
-    elif st.session_state.active_tab == "Feedback Loop":
-        render_jd_refine_page(logger, analyzer, agent)  # Use the same function for feedback loop
+    # Render the appropriate page based on active tab
+    if st.session_state.active_tab == "JD Optimization":
+        render_jd_optimization_page(logger, analyzer, agent)
     elif st.session_state.active_tab == "Candidate Ranking":
         render_candidate_ranking_page()
     elif st.session_state.active_tab == "Client Feedback":
