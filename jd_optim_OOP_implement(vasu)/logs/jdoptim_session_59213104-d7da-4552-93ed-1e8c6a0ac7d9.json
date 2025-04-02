@@ -1,0 +1,26 @@
+{
+  "session_id": "59213104-d7da-4552-93ed-1e8c6a0ac7d9",
+  "username": "Recruiter",
+  "session_start_time": "2025-04-02T07:48:36.605462",
+  "selected_file": "Principal Software Engineer- CAN.txt",
+  "original_jd": "Principal Software Engineer \n\n \n\nAs the Principal Software Engineer you will join a team of talented engineers in crafting solutions to some of the most complex data plumbing problems in the world in diagnostics today. There are Billions of data points generated in systems that are not only inaccessible but were never designed to talk to each other.\u202f You will help create enterprise-scale software systems to tackle the fragmentation of this data. In this role, you will be up close and personal with all the usual things, like design conception, design reviews for components or features, development and testing of the core software stack.  \n\n \n\nThe Opportunity:\u202f \n\nYou will write high-quality, scalable, supportable, and extensible code for software applications. \n\nEnsure seamless integration of the software stack with our existing CI pipeline, contributing to continuous improvements. \n\nDesign, plan, and deliver high-quality software independently, maintaining excellence in execution. \n\nAmplify our culture by embodying our values of technical excellence, integrity, support, and compassion for individuals. \n\nActively contribute to the ongoing improvement of processes and operations, ensuring the highest standards in software development. \n\nWho you are \n\nBachelor\u2019s degree in Computer Science or a related technical discipline \n\nYou have over 8 years of hands-on experience in designing, developing, and deploying scalable web applications and services, with proficiency in Java, Spring Boot, and JPA. \n\nProven leadership skills to guide the team towards successful project execution and collaboration with software architects on deployment architecture for optimal stability, performance, and security. \n\nExpertise in crafting relational data models, REST APIs, and implementing message broker-based distributed architectures (e.g., RabbitMQ and Spring AMQP), along with experience in both relational (PostgreSQL, MySQL) and NoSQL databases. \n\nAbility to understand sophisticated workflows and effectively work with globally distributed teams. \n\n \nPreferred\u202f \n\nMaster\u2019s degree \n\nExperience developing regulated products under design control \n\nExperience with virtualization, containers, and orchestration platforms (Dockers, Kubernetes) \n\nCuriosity in bioinformatics analysis and computational pipelines \n\nExperience with GitHub actions \n\nFamiliarity with DevOps automation tools like Jenkins, Terraform, Ansible etc. \n\nExperience developing and deploying production software using public cloud infrastructure, preferably AWS \n\nPassionate for continuous improvement in software development processes & framework \n\n ",
+  "enhanced_versions": [],
+  "selected_version": null,
+  "feedback_history": [],
+  "current_enhanced_version": null,
+  "final_version": null,
+  "actions": [
+    {
+      "action": "file_selected",
+      "file_name": "DataAnalyticsAIMLJD (1).txt",
+      "username": "Recruiter",
+      "timestamp": "2025-04-02T07:48:36.648694"
+    },
+    {
+      "action": "file_selected",
+      "file_name": "Principal Software Engineer- CAN.txt",
+      "username": "Recruiter",
+      "timestamp": "2025-04-02T07:49:27.938879"
+    }
+  ]
+}

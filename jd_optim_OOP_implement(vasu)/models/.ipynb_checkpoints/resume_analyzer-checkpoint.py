@@ -14,6 +14,10 @@ class ResumeAnalyzer:
     def __init__(self):
         """Initialize the ResumeAnalyzer"""
         self.vectorizer = TfidfVectorizer()
+        # Get the base directory (where your app is running)
+        self.base_dir = os.getcwd()
+        # Define the specific path to the Exctracted Resumes folder
+        self.resume_dir = os.path.join(self.base_dir, "Exctracted Resumes")
     
     def compute_similarity(self, job_desc, resume_df):
         """
@@ -26,8 +30,13 @@ class ResumeAnalyzer:
         Returns:
             numpy.ndarray: Array of similarity scores
         """
-        # Extract skills from job description
-        job_skills = extract_skills(str(job_desc['Skills']) + ' ' + str(job_desc['Tools']))
+        # Check if job_desc is valid
+        if not isinstance(job_desc, (dict, pd.Series)) or 'Skills' not in job_desc:
+            st.warning("Invalid job description format. Using empty skills for comparison.")
+            job_skills = {'programming_languages': [], 'frameworks': [], 'databases': [], 'cloud': [], 'tools': []}
+        else:
+            # Extract skills from job description
+            job_skills = extract_skills(str(job_desc['Skills']) + ' ' + str(job_desc['Tools']))
         
         similarity_scores = []
         for _, resume in resume_df.iterrows():
@@ -49,7 +58,7 @@ class ResumeAnalyzer:
             skill_score = np.mean(category_scores) if category_scores else 0
             
             # Calculate text similarity
-            job_text = preprocess_text(str(job_desc['Skills']) + ' ' + str(job_desc['Tools']))
+            job_text = preprocess_text(str(job_desc.get('Skills', '')) + ' ' + str(job_desc.get('Tools', '')))
             resume_text = preprocess_text(
                 str(resume['Skills']) + ' ' + 
                 str(resume['Tools']) + ' ' + 
@@ -79,17 +88,43 @@ class ResumeAnalyzer:
         Returns:
             dict: Dictionary with categorized resumes
         """
-        similarity_scores = self.compute_similarity(job_desc, resume_df)
+        # Check if inputs are valid
+        if resume_df is None or len(resume_df) == 0:
+            st.warning("No resume data available for analysis")
+            empty_result = {
+                'top_3': [],
+                'high_matches': [],
+                'medium_matches': [],
+                'low_matches': []
+            }
+            return empty_result
+            
+        # Compute similarity scores
+        try:
+            similarity_scores = self.compute_similarity(job_desc, resume_df)
+        except Exception as e:
+            st.error(f"Error computing similarity: {str(e)}")
+            # Return empty results in case of error
+            empty_result = {
+                'top_3': [],
+                'high_matches': [],
+                'medium_matches': [],
+                'low_matches': []
+            }
+            return empty_result
         
         all_resumes = []
         for i, score in enumerate(similarity_scores):
-            all_resumes.append({
-                'Resume ID': resume_df.iloc[i]['File Name'],
-                'Skills': resume_df.iloc[i]['Skills'],
-                'Tools': resume_df.iloc[i]['Tools'],
-                'Certifications': resume_df.iloc[i]['Certifications'],
-                'Score': score
-            })
+            # Make sure we don't go out of bounds
+            if i < len(resume_df):
+                resume_row = resume_df.iloc[i]
+                all_resumes.append({
+                    'Resume ID': resume_row.get('File Name', f"Resume_{i+1}"),
+                    'Skills': resume_row.get('Skills', ''),
+                    'Tools': resume_row.get('Tools', ''),
+                    'Certifications': resume_row.get('Certifications', ''),
+                    'Score': score
+                })
         
         # Sort all resumes by score
         all_resumes.sort(key=lambda x: x['Score'], reverse=True)
@@ -100,7 +135,7 @@ class ResumeAnalyzer:
         low_matches = [r for r in all_resumes if r['Score'] < 0.2]
         
         return {
-            'top_3': all_resumes[:3],
+            'top_3': all_resumes[:3] if len(all_resumes) >= 3 else all_resumes,
             'high_matches': high_matches,
             'medium_matches': medium_matches,
             'low_matches': low_matches
@@ -117,31 +152,54 @@ class ResumeAnalyzer:
             DataFrame: DataFrame containing resume data
         """
         try:
-            # Check for resume directory with multiple possible spellings
-            directories_to_check = [
-                "Exctracted Resumes",  # Match your actual directory name first
-                "Extracted Resumes", 
-                "ExtractedResumes", 
-                "Resumes"
-            ]
-            
-            extracted_dir = None
-            for dir_name in directories_to_check:
-                if os.path.exists(dir_name):
-                    extracted_dir = dir_name
-                    break
-            
-            # Get all CSV files either from the directory or current directory
-            if extracted_dir:
-                st.info(f"Using resume directory: {extracted_dir}")
-                resume_files = [f for f in os.listdir(extracted_dir) if f.endswith('.csv')]
+            # Check if the specific Exctracted Resumes directory exists
+            if os.path.exists(self.resume_dir) and os.path.isdir(self.resume_dir):
+                st.info(f"Using resume directory: Exctracted Resumes")
+                resume_files = [f for f in os.listdir(self.resume_dir) if f.endswith('.csv')]
             else:
-                # Look for CSV files in current directory if no resume folder exists
-                resume_files = [f for f in os.listdir() if f.endswith('.csv')]
+                # Fallback to looking in the current directory
+                st.warning("'Exctracted Resumes' directory not found. Looking for resume files in the current directory.")
+                resume_files = [f for f in os.listdir(self.base_dir) if f.endswith('.csv') and 'resume' in f.lower()]
+            
+            # If still no files found, try alternative paths
+            if not resume_files:
+                # Try to find any CSV files that might contain resume data
+                alt_paths = [
+                    os.path.join(self.base_dir, "Extracted Resumes"),
+                    os.path.join(self.base_dir, "Resumes"),
+                    os.path.join(self.base_dir, "data"),
+                    self.base_dir
+                ]
+                
+                for path in alt_paths:
+                    if os.path.exists(path) and os.path.isdir(path):
+                        path_files = [f for f in os.listdir(path) if f.endswith('.csv')]
+                        if path_files:
+                            st.info(f"Found resume files in alternative directory: {os.path.basename(path)}")
+                            resume_files = path_files
+                            self.resume_dir = path  # Update the resume directory
+                            break
+            
+            # If still no files, try specific file names based on jd_type
+            if not resume_files and jd_type:
+                default_files = {
+                    "java_developer": ["resumes_analysis_outputJDJavaDeveloper.csv", "java_resumes.csv"],
+                    "data_engineer": ["resumes_analysis_output_JDPrincipalSoftwareEngineer.csv", "data_resumes.csv"],
+                    "general": ["resumes_analysis_output.csv", "resumes.csv"]
+                }
+                
+                default_file_list = default_files.get(jd_type, ["resumes_analysis_output.csv"])
+                
+                for file_name in default_file_list:
+                    if os.path.exists(os.path.join(self.base_dir, file_name)):
+                        resume_files = [file_name]
+                        self.resume_dir = self.base_dir
+                        st.info(f"Using default resume file for {jd_type}: {file_name}")
+                        break
             
             if not resume_files:
-                st.warning(f"No resume CSV files found. Please add resume files to continue.")
-                return None
+                st.warning("No resume CSV files found. Using sample data.")
+                return self.create_sample_resume_df()
             
             # Let user select a file from dropdown
             selected_file = st.selectbox(
@@ -151,45 +209,54 @@ class ResumeAnalyzer:
             )
             
             # Determine the full path to the selected file
-            if extracted_dir and os.path.exists(os.path.join(extracted_dir, selected_file)):
-                file_path = os.path.join(extracted_dir, selected_file)
-            else:
-                file_path = selected_file
-                
+            file_path = os.path.join(self.resume_dir, selected_file)
+            
             # Read the selected CSV file
-            resume_df = pd.read_csv(file_path)
-            return resume_df
+            try:
+                resume_df = pd.read_csv(file_path)
+                
+                # Ensure required columns exist
+                for col in ['File Name', 'Skills', 'Tools', 'Certifications']:
+                    if col not in resume_df.columns:
+                        resume_df[col] = ""
+                
+                return resume_df
+            except Exception as e:
+                st.error(f"Error reading file {file_path}: {str(e)}")
+                return self.create_sample_resume_df()
         
         except Exception as e:
-            st.error(f"Error loading resume data: {e}")
-            
-            # Create and return sample data instead
-            st.info("Using sample resume data instead")
-            sample_resume_data = {
-                'File Name': ['Resume_1', 'Resume_2', 'Resume_3', 'Resume_4', 'Resume_5'],
-                'Skills': [
-                    'Python, Java, Data Analysis, Machine Learning', 
-                    'Java, Python, SQL, REST API',
-                    'C#, .NET, Azure, Cloud Computing',
-                    'Java, Spring, Hibernate, SQL, REST',
-                    'Python, ML, AI, Deep Learning, SQL'
-                ],
-                'Tools': [
-                    'TensorFlow, Scikit-learn, Docker, Git', 
-                    'IntelliJ, Eclipse, Git, Maven',
-                    'Visual Studio, Git, Azure DevOps',
-                    'Jenkins, Maven, Docker, Kubernetes',
-                    'Pandas, NumPy, Jupyter, Keras'
-                ],
-                'Certifications': [
-                    'AWS Machine Learning Specialty', 
-                    'Oracle Java Professional',
-                    'Microsoft Azure Developer',
-                    'AWS Developer Associate',
-                    'Google Professional Data Engineer'
-                ]
-            }
-            return pd.DataFrame(sample_resume_data)
+            st.error(f"Error loading resume data: {str(e)}")
+            return self.create_sample_resume_df()
+    
+    def create_sample_resume_df(self):
+        """Create a sample resume DataFrame"""
+        st.info("Using sample resume data")
+        sample_resume_data = {
+            'File Name': ['Resume_1', 'Resume_2', 'Resume_3', 'Resume_4', 'Resume_5'],
+            'Skills': [
+                'Python, Java, Data Analysis, Machine Learning', 
+                'Java, Python, SQL, REST API',
+                'C#, .NET, Azure, Cloud Computing',
+                'Java, Spring, Hibernate, SQL, REST',
+                'Python, ML, AI, Deep Learning, SQL'
+            ],
+            'Tools': [
+                'TensorFlow, Scikit-learn, Docker, Git', 
+                'IntelliJ, Eclipse, Git, Maven',
+                'Visual Studio, Git, Azure DevOps',
+                'Jenkins, Maven, Docker, Kubernetes',
+                'Pandas, NumPy, Jupyter, Keras'
+            ],
+            'Certifications': [
+                'AWS Machine Learning Specialty', 
+                'Oracle Java Professional',
+                'Microsoft Azure Developer',
+                'AWS Developer Associate',
+                'Google Professional Data Engineer'
+            ]
+        }
+        return pd.DataFrame(sample_resume_data)
     
     def analyze_uploaded_resume(self, uploaded_file):
         """
@@ -205,14 +272,17 @@ class ResumeAnalyzer:
         if not uploaded_file.name.endswith(".docx"):
             raise ValueError(f"Unsupported file format for {uploaded_file.name}. Only .docx files are supported.")
         
-        # Write the uploaded file to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
-            tmp.write(uploaded_file.getvalue())
-            tmp_path = tmp.name
+        # Create a temporary file with a unique name
+        temp_filename = f"temp_{uploaded_file.name.replace(' ', '_')}_{np.random.randint(10000)}.docx"
+        temp_path = os.path.join(tempfile.gettempdir(), temp_filename)
         
         try:
+            # Write the uploaded file to a temporary file
+            with open(temp_path, 'wb') as f:
+                f.write(uploaded_file.getvalue())
+            
             # Extract text from the document
-            doc = Document(tmp_path)
+            doc = Document(temp_path)
             resume_text = "\n".join([para.text for para in doc.paragraphs])
             
             # Basic extraction - in a real implementation, you would use NLP or an LLM
@@ -244,8 +314,8 @@ class ResumeAnalyzer:
             return None
         finally:
             # Always remove the temporary file
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
     
     def process_resume_pool(self, uploaded_files):
         """

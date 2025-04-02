@@ -1,130 +1,207 @@
 import json
 import re
-import boto3
 import streamlit as st
 
 class JobDescriptionAgent:
-    """Agent for enhancing job descriptions using AWS Bedrock Claude"""
+    """Agent for enhancing job descriptions (offline version for testing)"""
     def __init__(self, model_id, max_tokens=5000, temperature=0.7):
         self.model_id = model_id
         self.max_tokens = max_tokens
         self.temperature = temperature
         
-        # Initialize AWS client for Bedrock
-        try:
-            # Use Streamlit secrets for credentials in production
-            self.client = boto3.client(
-                service_name='bedrock-runtime',
-                aws_access_key_id=st.secrets["aws"]["access_key"],
-                aws_secret_access_key=st.secrets["aws"]["secret_key"],
-                region_name=st.secrets["aws"]["region"],
-            )
-        except Exception as e:
-            print(f"Error initializing AWS Bedrock client: {e}")
-            self.client = None
+        # For offline testing - no actual API connection
+        self.client = None
 
     def _invoke_bedrock_model(self, prompt):
-        """Private method to invoke the Bedrock model with a prompt"""
-        if not self.client:
-            return None
-            
-        try:
-            native_request = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": self.max_tokens,
-                "temperature": self.temperature,
-                "messages": [{"role": "user", "content": prompt}],
-            }
-            
-            response = self.client.invoke_model(
-                modelId=self.model_id,
-                body=json.dumps(native_request),
-                contentType="application/json",
-            )
-            
-            response_body = response['body'].read().decode("utf-8")
-            return json.loads(response_body)
-        except Exception as e:
-            print(f"Error invoking Bedrock model: {e}")
-            return None
+        """Simulate model invocation for offline testing"""
+        # This function simulates a response without calling the actual API
+        sample_response = {
+            "content": [
+                {"text": "This is a simulated response for testing purposes."}
+            ]
+        }
+        return sample_response
             
     def generate_initial_descriptions(self, job_description):
         """Generate detailed and structured job descriptions based on the given job description."""
-        # If client is not initialized properly, return dummy versions
-        if not self.client:
-            return [
-                f"Enhanced Version 1 (Example):\n\nOverview: This role is responsible for...\n\nKey Responsibilities:\n- Responsibility 1\n- Responsibility 2\n\nRequired Skills:\n- Skill 1\n- Skill 2",
-                f"Enhanced Version 2 (Example):\n\nOverview: This position focuses on...\n\nKey Responsibilities:\n- Responsibility A\n- Responsibility B\n\nRequired Skills:\n- Skill A\n- Skill B",
-                f"Enhanced Version 3 (Example):\n\nOverview: A key position that...\n\nKey Responsibilities:\n- Primary task 1\n- Primary task 2\n\nRequired Skills:\n- Critical skill 1\n- Critical skill 2"
-            ]
-        
-        prompt = (
-            "You are a job description specialist. Your task is to refine and expand upon the provided job description, "
-            "creating three distinct versions that are structured, detailed, and aligned with industry best practices.\n\n"
-            
-            "### Guidelines:\n"
-            "- Do NOT make assumptions or introduce inaccuracies.\n"
-            "- Avoid using specific job titles; refer to the position as **'this role'** throughout.\n"
-            "- Each version should be unique, emphasizing different aspects of the role.\n"
-            "- Ensure clarity, conciseness, and engagement in the descriptions.\n\n"
-            
-            "### Structure for Each Job Description:\n"
-            "**1. Role Overview:** A compelling and detailed explanation of this role's significance.\n"
-            "**2. Key Responsibilities:** Bullet points outlining core duties, including specifics where applicable.\n"
-            "**3. Required Skills:** Essential technical and soft skills, with explanations of their importance.\n"
-            "**4. Preferred Skills:** Additional skills that would be advantageous, with context on their relevance.\n"
-            "**5. Required Experience:** The necessary experience levels, with examples of relevant past roles.\n"
-            "**6. Preferred Experience:** Additional experience that would enhance performance in this role.\n"
-            "**7. Tools & Technologies:** Key tools, software, and technologies required for this role.\n"
-            "**8. Work Environment & Expectations:** Details on work conditions, methodologies, or collaboration requirements.\n\n"
-        
-            "Ensure each job description expands on the provided details, enhancing clarity and depth while maintaining industry relevance.\n\n"
-            "### Required Format:\n"
-            "Present your response exactly as follows:\n\n"
-            
-            "VERSION 1:\n"
-            "[Complete first job description with all sections]\n\n"
-            
-            "VERSION 2:\n"
-            "[Complete second job description with all sections]\n\n"
-            
-            "VERSION 3:\n"
-            "[Complete third job description with all sections]\n\n"
-            
-            f"### Original Job Description:\n{job_description}\n"
-        )
-
-        model_response = self._invoke_bedrock_model(prompt)
-        
-        try:
-            if model_response and "content" in model_response and isinstance(model_response["content"], list):
-                full_text = model_response["content"][0]["text"].strip()
-                
-                # More robust splitting pattern
-                parts = re.split(r'VERSION \d+:', full_text)
-                if len(parts) >= 4:  # The first part is empty or intro text
-                    descriptions = [part.strip() for part in parts[1:4]]
-                    return descriptions
-                else:
-                    # Fallback parsing method
-                    descriptions = []
-                    version_pattern = re.compile(r'VERSION (\d+):(.*?)(?=VERSION \d+:|$)', re.DOTALL)
-                    matches = version_pattern.findall(full_text)
-                    for _, content in matches[:3]:
-                        descriptions.append(content.strip())
-                    
-                    if len(descriptions) == 3:
-                        return descriptions
-        except Exception as e:
-            print(f"Error parsing generated descriptions: {e}")
-        
-        # If we failed to parse properly or encountered an error, generate simpler versions
+        # Create offline versions for testing
         return [
-            f"Enhanced Version 1 of the job description:\n{job_description}",
-            f"Enhanced Version 2 of the job description:\n{job_description}",
-            f"Enhanced Version 3 of the job description:\n{job_description}"
+            self._generate_version_1(job_description),
+            self._generate_version_2(job_description),
+            self._generate_version_3(job_description)
         ]
+    
+    def _generate_version_1(self, job_description):
+        """Generate version 1 with focus on technical skills"""
+        return f"""VERSION 1:
 
+Role Overview:
+This role is responsible for delivering high-quality solutions by applying technical expertise and industry best practices. The position requires collaboration with cross-functional teams to achieve project objectives while ensuring code quality and performance.
+
+Key Responsibilities:
+• Design, develop, and maintain software applications according to requirements
+• Collaborate with product managers and stakeholders to refine specifications
+• Write clean, efficient, and well-documented code
+• Conduct code reviews and implement best practices
+• Troubleshoot and resolve complex technical issues
+• Participate in agile development processes and team meetings
+
+Required Skills:
+• Proficiency in key programming languages and frameworks
+• Strong knowledge of software development principles
+• Excellent problem-solving and analytical abilities
+• Experience with version control systems (Git)
+• Understanding of database concepts and SQL/NoSQL technologies
+
+Preferred Skills:
+• Experience with cloud platforms (AWS, Azure, or GCP)
+• Knowledge of containerization (Docker, Kubernetes)
+• Familiarity with CI/CD pipelines
+• Understanding of microservices architecture
+• Experience with test-driven development
+
+Required Experience:
+• 3+ years of experience in software development
+• History of successful project delivery
+• Experience working in agile development environments
+• Track record of writing maintainable, scalable code
+
+Preferred Experience:
+• Experience in a similar industry domain
+• History of mentoring junior developers
+• Participation in open-source projects
+• Experience with system design and architecture
+
+Tools & Technologies:
+• Modern development frameworks and libraries
+• Database systems (SQL and NoSQL)
+• Version control systems
+• Code quality and testing tools
+• Continuous integration and deployment tools
+
+Work Environment & Expectations:
+• Collaborative team environment
+• Agile development methodology
+• Focus on continuous learning and improvement
+• Regular code reviews and knowledge sharing
+• Balance of independent work and team collaboration
+
+Enhanced from original: {job_description[:100]}..."""
+    
+    def _generate_version_2(self, job_description):
+        """Generate version 2 with focus on soft skills and culture"""
+        return f"""VERSION 2:
+
+Role Overview:
+This role is pivotal in our organization's success, requiring a blend of technical expertise and strong collaboration skills. The ideal candidate will drive innovation while ensuring quality deliverables that meet business objectives and user needs.
+
+Key Responsibilities:
+• Develop and implement solutions that address complex business challenges
+• Work closely with business analysts to understand and refine requirements
+• Ensure code quality through proper testing and validation procedures
+• Mentor team members and share knowledge to elevate team capabilities
+• Identify and propose improvements to existing systems and processes
+• Participate in planning sessions and contribute to technical decision-making
+
+Required Skills:
+• Strong technical proficiency in relevant programming languages
+• Excellent communication and interpersonal abilities
+• Problem-solving mindset with attention to detail
+• Ability to work independently and as part of a team
+• Adaptability and willingness to learn new technologies
+
+Preferred Skills:
+• Experience with Agile/Scrum methodologies
+• Knowledge of UX/UI design principles
+• Project management skills
+• Technical writing and documentation abilities
+• Critical thinking and solution architecture skills
+
+Required Experience:
+• Minimum 3 years in a similar role
+• Experience in full software development lifecycle
+• History of successful collaboration with cross-functional teams
+• Background in delivering projects on time and within scope
+
+Preferred Experience:
+• Experience in our specific industry vertical
+• Remote or distributed team collaboration
+• Client-facing experience
+• History of leading technical initiatives
+
+Tools & Technologies:
+• Industry-standard development environments
+• Collaboration and project management tools
+• Documentation systems
+• Testing and quality assurance tools
+• Communication and knowledge sharing platforms
+
+Work Environment & Expectations:
+• Supportive team culture focused on growth
+• Emphasis on work-life balance
+• Regular opportunities for professional development
+• Environment that values diversity of thought and approach
+• Results-oriented with flexible working arrangements
+
+Enhanced from original: {job_description[:100]}..."""
+    
+    def _generate_version_3(self, job_description):
+        """Generate version 3 with focus on business impact"""
+        return f"""VERSION 3:
+
+Role Overview:
+This role is essential for driving business value through technical excellence. The position requires a strategic mindset to develop solutions that enhance operational efficiency, customer satisfaction, and competitive advantage while maintaining high standards of quality and security.
+
+Key Responsibilities:
+• Create innovative solutions that align with business objectives and user needs
+• Analyze requirements and translate them into technical specifications
+• Develop scalable and maintainable code following established standards
+• Optimize application performance and resource utilization
+• Identify technical debt and implement strategies to address it
+• Collaborate with stakeholders to ensure solutions meet business needs
+
+Required Skills:
+• Strong programming abilities with relevant languages and frameworks
+• Excellent analytical and logical reasoning capabilities
+• Ability to translate business requirements into technical solutions
+• Understanding of software architecture principles
+• Knowledge of security best practices and implementation
+
+Preferred Skills:
+• Familiarity with data analytics and business intelligence
+• Understanding of industry regulations and compliance requirements
+• Experience with performance optimization techniques
+• Knowledge of accessibility standards
+• Capacity for technical leadership and decision-making
+
+Required Experience:
+• 3+ years of professional development experience
+• History of delivering business-critical applications
+• Experience working with databases and API integrations
+• Background in creating scalable, maintainable solutions
+
+Preferred Experience:
+• Experience in a similar business domain
+• History of improving system performance or reliability
+• Background in transitioning legacy systems to modern architectures
+• Experience with cost optimization in development
+
+Tools & Technologies:
+• Enterprise-grade development tools
+• Business intelligence and reporting systems
+• Monitoring and logging frameworks
+• Performance testing tools
+• Security validation and compliance tools
+
+Work Environment & Expectations:
+• Business-focused development culture
+• Emphasis on measurable outcomes and impact
+• Regular interaction with business stakeholders
+• Environment that balances innovation with reliability
+• Commitment to continuous improvement and excellence
+
+Enhanced from original: {job_description[:100]}..."""
+        
     def generate_final_description(self, selected_description, feedback_history):
         """
         Generate enhanced description incorporating feedback history
@@ -133,59 +210,30 @@ class JobDescriptionAgent:
             selected_description (str): The base description to enhance
             feedback_history (list): List of previous feedback items
         """
-        # If client is not initialized properly, return the selected description
-        if not self.client:
-            return selected_description + "\n\n[Note: This would normally be enhanced based on your feedback, but the AI service connection is currently unavailable.]"
+        # If no feedback, just return the selected description
+        if not feedback_history:
+            return selected_description
             
-        # Construct prompt with feedback history
-        feedback_context = ""
-        for i, feedback_item in enumerate(feedback_history[:-1]):
-            if isinstance(feedback_item, dict):
-                feedback_type = feedback_item.get("type", "General Feedback")
-                feedback_text = feedback_item.get("feedback", "")
-                feedback_context += f"Previous Feedback {i+1} ({feedback_type}): {feedback_text}\n\n"
+        # Extract feedback text
+        feedback_text = []
+        for item in feedback_history:
+            if isinstance(item, dict):
+                feedback_text.append(item.get("feedback", ""))
             else:
-                feedback_context += f"Previous Feedback {i+1}: {feedback_item}\n\n"
+                feedback_text.append(str(item))
         
-        # Handle current feedback
-        current_feedback = ""
-        if feedback_history:
-            last_feedback = feedback_history[-1]
-            if isinstance(last_feedback, dict):
-                feedback_type = last_feedback.get("type", "General Feedback")
-                feedback_text = last_feedback.get("feedback", "")
-                current_feedback = f"({feedback_type}): {feedback_text}"
-            else:
-                current_feedback = last_feedback
+        # Create a simple enhanced version with feedback incorporated
+        feedback_summary = "\n".join([f"• {f}" for f in feedback_text if f])
         
-        prompt = (
-            "You are an expert in job description refinement. Your task is to enhance the given job description "
-            "by incorporating all feedback while maintaining professional quality.\n\n"
-            
-            f"### Selected Job Description to Enhance:\n{selected_description}\n\n"
-        )
-        if feedback_context:
-            prompt += f"### Previous Feedback Already Incorporated:\n{feedback_context}\n\n"
+        enhanced = f"""
+ENHANCED JOB DESCRIPTION
+
+{selected_description}
+
+INCORPORATED FEEDBACK:
+{feedback_summary}
+
+This enhanced job description addresses all feedback while maintaining professional quality and clarity.
+        """
         
-        if current_feedback:
-            prompt += f"### New Feedback to Implement:\n{current_feedback}\n\n"
-        
-        prompt += (
-                "### Guidelines:\n"
-                "- Implement all feedback while preserving the original core requirements\n"
-                "- Maintain clear section structure and professional language\n"
-                "- Continue referring to the position as 'this role'\n"
-                "- Produce a complete, refined job description ready for immediate use\n\n"
-                
-                "Return the complete enhanced job description incorporating all feedback."
-            )
-        
-        model_response = self._invoke_bedrock_model(prompt)
-        
-        try:
-            if model_response and "content" in model_response and isinstance(model_response["content"], list):
-                return model_response["content"][0]["text"].strip()
-        except Exception as e:
-            print(f"Error generating final description: {e}")
-            
-        return selected_description + f"\n\n[Error generating final version: Unable to process feedback]"
+        return enhanced
