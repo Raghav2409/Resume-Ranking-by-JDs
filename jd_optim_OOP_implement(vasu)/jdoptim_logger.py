@@ -10,7 +10,7 @@ class JDOptimLogger:
         """Initialize the logger with session data"""
         self.session_id = str(uuid.uuid4())
         self.username = username
-        self.logs_dir = "logs"
+        self.logs_dir = os.path.join(os.getcwd(), "logs")
         
         # Create logs directory if it doesn't exist
         if not os.path.exists(self.logs_dir):
@@ -57,7 +57,7 @@ class JDOptimLogger:
         Returns:
             JDOptimLogger: A logger instance with the loaded state, or None if not found
         """
-        logs_dir = "logs"
+        logs_dir = os.path.join(os.getcwd(), "logs")
         filename = f"jdoptim_session_{session_id}.json"
         filepath = os.path.join(logs_dir, filename)
         
@@ -92,7 +92,7 @@ class JDOptimLogger:
         Returns:
             list: List of session information dictionaries
         """
-        logs_dir = "logs"
+        logs_dir = os.path.join(os.getcwd(), "logs")
         if not os.path.exists(logs_dir):
             return []
         

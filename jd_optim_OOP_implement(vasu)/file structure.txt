@@ -1,28 +1,60 @@
-
-
 jd_optim/
 │
 ├── app.py                          # Main application entrypoint
 ├── config.py                       # Configuration and settings
+├── state_manager.py                # Global state management
+├── jdoptim_logger.py               # Logging functionality
 │
-├── utils/
+├── Data/                           # Data directory
+│   ├── Data Set/                   # Dataset directory
+│   │   ├── Job Listing/            # Job listing files
+│   │   │   └── job_1742441396508.xlsx
+│   │   └── Position Report/        # Position report files
+│   │       └── PositionReport-Oct-Dec'24.xlsx
+│   │
+│   ├── Extracted Resumes/          # Resume dataset files
+│   │   ├── Resume_Dataset_Output.csv
+│   │   ├── resumes_analysis_output_JDPrincipalSoftwareEngineer.csv
+│   │   ├── resumes_analysis_output.csv
+│   │   ├── resumes_analysis_output2.csv
+│   │   └── resumes_analysis_outputJDJavaDeveloper.csv
+│   │
+│   ├── Feedbacks/                  # Feedback files
+│   │   ├── Feedback Channel -Java Support- JD Optimization (1).docx
+│   │   ├── Feedback Channel AIML- JD Optimization (1).docx
+│   │   ├── Feedback Flow- Principal Java.docx
+│   │   ├── Feedback post interview - Satya Sai Swaroop (1).docx
+│   │   ├── iC4 Job Description 1 (1).docx
+│   │   └── Post Interview feedback - Munn -Sree (1).docx
+│   │
+│   └── JDs/                        # Job description files
+│       ├── DataAnalyticsAIMLJD (1).txt
+│       ├── Job Description - Java Developer - Health Care.txt
+│       ├── JobDescriptionJavaPythonSupport.txt
+│       └── Principal Software Engineer- CAN.txt
+│
+├── utils/                          # Utility functions
 │   ├── __init__.py
 │   ├── file_utils.py               # File reading/writing utilities
+│   ├── job_search.py               # Job search functionality
 │   ├── text_processing.py          # Text processing utilities
 │   └── visualization.py            # Data visualization functions
 │
-├── models/
+├── models/                         # Model definitions
 │   ├── __init__.py
 │   ├── job_description_analyzer.py # JD analysis logic
 │   ├── job_description_agent.py    # AI enhancement agent
 │   └── resume_analyzer.py          # Resume analysis logic
 │
-├── ui/
+├── ui/                             # User interface components
 │   ├── __init__.py
-│   ├── common.py                   # Common UI elements
-│   ├── jd_enhance.py               # JD enhancement UI
-│   ├── jd_refine.py                # JD refinement UI
 │   ├── candidate_ranking.py        # Candidate ranking UI
-│   └── interview_prep.py           # Interview prep UI
+│   ├── client_feedback.py          # Client feedback UI
+│   ├── common.py                   # Common UI elements
+│   ├── interview_prep.py           # Interview prep UI
+│   └── jd_optimization.py          # JD optimization UI
 │
-└── jdoptim_logger.py               # Existing  helper logger class
+├── logs/                           # Log files directory
+│
+├── file_structure.txt              # This file structure documentation
+└── requirements.txt                # Python dependencies

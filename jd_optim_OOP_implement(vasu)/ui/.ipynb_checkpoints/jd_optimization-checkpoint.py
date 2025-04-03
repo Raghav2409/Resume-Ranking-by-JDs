@@ -120,60 +120,13 @@ def render_jd_optimization_page(services):
                                 st.error("Could not find job description for the selected job.")
         
         elif selected_source == "📁 File Selection":
-            jd_directory = os.path.join(os.getcwd(), "JDs")
+            jd_directory = os.path.join(os.getcwd(), "Data", "JDs")
             try:
                 # Create directory if it doesn't exist
                 if not os.path.exists(jd_directory):
-                    os.makedirs(jd_directory)
-                    st.info("Created JDs directory.")
-                    
-                    # Create sample files for demo
-                    sample_jds = {
-                        "SoftwareDeveloper.txt": """
-                        Software Developer
-                        
-                        Responsibilities:
-                        - Design, develop and maintain high-quality software
-                        - Write clean, efficient, and well-documented code
-                        - Collaborate with cross-functional teams
-                        - Debug and fix issues in existing applications
-                        - Implement new features and improvements
-                        
-                        Requirements:
-                        - Bachelor's degree in Computer Science or related field
-                        - Proficiency in Python, Java, or JavaScript
-                        - Knowledge of software development methodologies
-                        - Strong problem-solving skills
-                        - Experience with Git and CI/CD pipelines
-                        """,
-                        
-                        "DataEngineer.txt": """
-                        Data Engineer
-                        
-                        Responsibilities:
-                        - Design, build and maintain data pipelines
-                        - Develop ETL processes for data integration
-                        - Create and optimize database schemas
-                        - Ensure data quality and integrity
-                        - Collaborate with data scientists and analysts
-                        
-                        Requirements:
-                        - Bachelor's degree in Computer Science or related field
-                        - Experience with SQL and NoSQL databases
-                        - Proficiency in Python, Scala, or Java
-                        - Knowledge of big data technologies (Hadoop, Spark)
-                        - Experience with cloud platforms (AWS, Azure, GCP)
-                        """
-                    }
-                    
-                    # Write sample files
-                    for filename, content in sample_jds.items():
-                        file_path = os.path.join(jd_directory, filename)
-                        with open(file_path, "w") as f:
-                            f.write(content)
-                    
-                    st.success("Created sample job description files!")
-                    
+                    os.makedirs(jd_directory, exist_ok=True)
+                    st.info("Created Data/JDs directory.")
+                
                 files = [f for f in os.listdir(jd_directory) if f.endswith(('.txt', '.docx'))]
                 
                 if files:
@@ -195,7 +148,7 @@ def render_jd_optimization_page(services):
                         except Exception as e:
                             st.error(f"Error reading file: {str(e)}")
                 else:
-                    st.info("No job description files found. Please upload one or create a new file.")
+                    st.info("No job description files found in the Data/JDs directory. Please upload one or create a new file.")
             except Exception as e:
                 st.error(f"Error accessing JDs directory: {str(e)}")
         
@@ -235,14 +188,14 @@ def render_jd_optimization_page(services):
                     jd_unique_id = f"upload_{uploaded_file.name}"
                     
                     # Save to JDs directory for future use
-                    jd_dir = os.path.join(os.getcwd(), "JDs")
+                    jd_dir = os.path.join(os.getcwd(), "Data", "JDs")
                     os.makedirs(jd_dir, exist_ok=True)
                     save_path = os.path.join(jd_dir, uploaded_file.name)
                     
                     with open(save_path, 'wb') as f:
                         f.write(uploaded_file.getvalue())
                     
-                    st.success(f"Saved {uploaded_file.name} to JDs directory for future use.")
+                    st.success(f"Saved {uploaded_file.name} to Data/JDs directory for future use.")
                 except Exception as e:
                     st.error(f"Error processing uploaded file: {str(e)}")
         
@@ -297,7 +250,7 @@ def render_jd_optimization_page(services):
                     state_manager.update_jd_repository('reload_flag', False, source_tab="jd_optimization")
                     st.rerun()
                 
-                # Show a fake button that's disabled
+                # Show fake button
                 st.button(
                     "✅ Enhanced Versions Loaded", 
                     type="secondary", 
@@ -323,21 +276,29 @@ def render_jd_optimization_page(services):
                 if not original_jd:
                     st.error("Original job description not found. Please select a job description first.")
                     return
-                    
-                versions = agent.generate_initial_descriptions(original_jd)
                 
-                # Ensure we have 3 versions
-                while len(versions) < 3:
-                    versions.append(f"Enhanced Version {len(versions)+1}:\n{original_jd}")
-                
-                # Update the repository
-                state_manager.update_jd_repository('enhanced_versions', versions, source_tab="jd_optimization")
-                
-                # Log versions generated if logger is available
-                if logger:
-                    logger.log_versions_generated(versions)
-                
-                st.rerun()
+                try:
+                    # Generate enhanced versions using the agent
+                    if agent and hasattr(agent, 'generate_initial_descriptions'):
+                        versions = agent.generate_initial_descriptions(original_jd)
+                        
+                        # Ensure we have 3 versions
+                        while len(versions) < 3:
+                            versions.append(f"Enhanced Version {len(versions)+1}:\n{original_jd}")
+                        
+                        # Update the repository
+                        state_manager.update_jd_repository('enhanced_versions', versions, source_tab="jd_optimization")
+                        
+                        # Log versions generated if logger is available
+                        if logger:
+                            logger.log_versions_generated(versions)
+                        
+                        # Force rerun to show new versions
+                        st.rerun()
+                    else:
+                        st.error("AI agent not available or missing required method.")
+                except Exception as e:
+                    st.error(f"Error generating enhanced versions: {str(e)}")
         
         # Display enhanced versions if available
         if cached_versions:
@@ -369,39 +330,43 @@ def render_jd_optimization_page(services):
             # Show analysis & comparison tab content
             with enhanced_tabs[1]:
                 # Analyze all versions
-                original_scores = analyzer.analyze_text(jd_repository.get('original', ''))
-                intermediate_scores = {
-                    f'Version {i+1}': analyzer.analyze_text(version)
-                    for i, version in enumerate(cached_versions)
-                }
-                
-                # Combine all scores for comparison
-                all_scores = {'Original': original_scores, **intermediate_scores}
-                
-                # Update analytics repository
-                analytics_repository = state_manager.get('analytics_repository', {})
-                analytics_repository['original_scores'] = original_scores
-                analytics_repository['version_scores'] = intermediate_scores
-                state_manager.set('analytics_repository', analytics_repository)
-                
-                analysis_col1, analysis_col2 = st.columns([1, 1])
+                try:
+                    original_scores = analyzer.analyze_text(jd_repository.get('original', ''))
+                    intermediate_scores = {
+                        f'Version {i+1}': analyzer.analyze_text(version)
+                        for i, version in enumerate(cached_versions)
+                    }
                     
-                with analysis_col1:
-                    st.subheader("Skill Coverage Comparison")
-                    radar_chart = create_multi_radar_chart(all_scores)
-                    st.plotly_chart(radar_chart, use_container_width=True, key="intermediate_radar")
+                    # Combine all scores for comparison
+                    all_scores = {'Original': original_scores, **intermediate_scores}
                     
-                with analysis_col2:
-                    st.subheader("Detailed Analysis")
-                    comparison_df = create_comparison_dataframe(all_scores)
-                    st.dataframe(
-                        comparison_df,
-                        height=400,
-                        use_container_width=True,
-                        hide_index=True,
-                        key="intermediate_comparison"
-                    )
-                    st.caption("Percentages indicate keyword coverage in each category")
+                    # Update analytics repository
+                    analytics_repository = state_manager.get('analytics_repository', {})
+                    analytics_repository['original_scores'] = original_scores
+                    analytics_repository['version_scores'] = intermediate_scores
+                    state_manager.set('analytics_repository', analytics_repository)
+                    
+                    analysis_col1, analysis_col2 = st.columns([1, 1])
+                        
+                    with analysis_col1:
+                        st.subheader("Skill Coverage Comparison")
+                        radar_chart = create_multi_radar_chart(all_scores)
+                        st.plotly_chart(radar_chart, use_container_width=True, key="intermediate_radar")
+                        
+                    with analysis_col2:
+                        st.subheader("Detailed Analysis")
+                        comparison_df = create_comparison_dataframe(all_scores)
+                        st.dataframe(
+                            comparison_df,
+                            height=400,
+                            use_container_width=True,
+                            hide_index=True,
+                            key="intermediate_comparison"
+                        )
+                        st.caption("Percentages indicate keyword coverage in each category")
+                except Exception as e:
+                    st.error(f"Error generating analysis: {str(e)}")
+                    st.info("Could not generate comparison analysis. Please try again later.")
         
         ##########################
         # Part 3: Provide Feedback & Generate Final Version
@@ -576,19 +541,22 @@ def render_jd_optimization_page(services):
                         feedback_history = feedback_repository.get('history', [])
                         
                         # Generate final JD using AI agent
-                        final_description = agent.generate_final_description(
-                            base_description, feedback_history
-                        )
-                        
-                        # Update state
-                        state_manager.update_jd_repository('final_version', final_description, source_tab="jd_optimization")
-                        
-                        # Log to logger if available
-                        if logger:
-                            logger.log_enhanced_version(final_description, is_final=True)
-                        
-                        display_success_message("Final version generated successfully!")
-                        st.rerun()
+                        if agent and hasattr(agent, 'generate_final_description'):
+                            final_description = agent.generate_final_description(
+                                base_description, feedback_history
+                            )
+                            
+                            # Update state
+                            state_manager.update_jd_repository('final_version', final_description, source_tab="jd_optimization")
+                            
+                            # Log to logger if available
+                            if logger:
+                                logger.log_enhanced_version(final_description, is_final=True)
+                            
+                            display_success_message("Final version generated successfully!")
+                            st.rerun()
+                        else:
+                            st.error("AI agent not available or missing required method.")
                 except Exception as e:
                     st.error(f"An error occurred: {str(e)}")
                     return
@@ -609,31 +577,35 @@ def render_jd_optimization_page(services):
                 # Compare original vs final JD with skill analysis
                 display_subsection_header("📊 Final Analysis")
                 
-                # Calculate scores
-                original_scores = analyzer.analyze_text(jd_repository.get('original', ''))
-                final_scores = analyzer.analyze_text(final_version)
-                
-                # Update analytics repository
-                analytics_repository = state_manager.get('analytics_repository', {})
-                analytics_repository['final_scores'] = final_scores
-                state_manager.set('analytics_repository', analytics_repository)
-                
-                # Create comparison charts
-                col1, col2 = st.columns([1, 1])
-                
-                with col1:
-                    final_radar = create_multi_radar_chart({'Original': original_scores, 'Final': final_scores})
-                    st.plotly_chart(final_radar, use_container_width=True, key="final_radar")
-                
-                with col2:
-                    final_comparison_df = create_comparison_dataframe({'Original': original_scores, 'Final': final_scores})
-                    st.dataframe(
-                        final_comparison_df, 
-                        height=400, 
-                        use_container_width=True, 
-                        hide_index=True, 
-                        key="final_comparison"
-                    )
+                try:
+                    # Calculate scores
+                    original_scores = analyzer.analyze_text(jd_repository.get('original', ''))
+                    final_scores = analyzer.analyze_text(final_version)
+                    
+                    # Update analytics repository
+                    analytics_repository = state_manager.get('analytics_repository', {})
+                    analytics_repository['final_scores'] = final_scores
+                    state_manager.set('analytics_repository', analytics_repository)
+                    
+                    # Create comparison charts
+                    col1, col2 = st.columns([1, 1])
+                    
+                    with col1:
+                        final_radar = create_multi_radar_chart({'Original': original_scores, 'Final': final_scores})
+                        st.plotly_chart(final_radar, use_container_width=True, key="final_radar")
+                    
+                    with col2:
+                        final_comparison_df = create_comparison_dataframe({'Original': original_scores, 'Final': final_scores})
+                        st.dataframe(
+                            final_comparison_df, 
+                            height=400, 
+                            use_container_width=True, 
+                            hide_index=True, 
+                            key="final_comparison"
+                        )
+                except Exception as e:
+                    st.error(f"Error generating analysis: {str(e)}")
+                    st.info("Could not generate comparison analysis. Please try again later.")
                 
                 # Download Final JD
                 display_subsection_header("📥 Download Options")
@@ -669,115 +641,76 @@ def render_jd_optimization_page(services):
 
 def display_feedback_history_tab(state_manager, services):
     """
-    Display the feedback history tab
+    Display the feedback history tab content
     
     Args:
-        state_manager: The global state manager
+        state_manager: State manager instance
         services (dict): Dictionary of services
     """
-    display_section_header("📝 Feedback History")
-    
-    # Get feedback repository
-    feedback_repository = state_manager.get('feedback_repository', {})
-    feedback_history = feedback_repository.get('history', [])
-    
-    if not feedback_history:
-        st.info("No feedback history available yet.")
-        return
-    
-    # Process feedback history
     import pandas as pd
-    feedback_data = []
+    from ui.common import display_section_header, display_subsection_header
     
-    for i, feedback in enumerate(feedback_history):
-        # Extract feedback details
-        feedback_text = feedback.get("feedback", "") if isinstance(feedback, dict) else feedback
-        feedback_type = feedback.get("type", "General Feedback") if isinstance(feedback, dict) else "General Feedback"
-        feedback_role = feedback.get("role", "Unknown") if isinstance(feedback, dict) else "Unknown"
-        timestamp = feedback.get("timestamp", "")
+    display_section_header("Feedback History")
+    
+    # Get logger from services
+    logger = services.get('logger')
+    
+    # Check if we have feedback history
+    if logger and hasattr(logger, 'get_all_feedback'):
+        # Get all feedback with detailed information
+        feedback_data = logger.get_all_feedback()
         
-        # Format timestamp
-        formatted_time = "Unknown"
-        if timestamp:
-            try:
-                dt = datetime.datetime.fromisoformat(timestamp)
-                formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S")
-            except:
-                formatted_time = str(timestamp)
+        if feedback_data:
+            # Create a DataFrame for better display
+            feedback_df = pd.DataFrame(feedback_data)
+            
+            # Display feedback history
+            st.dataframe(
+                feedback_df,
+                height=400,
+                use_container_width=True,
+                column_config={
+                    'ID': st.column_config.NumberColumn(width="small"),
+                    'Time': st.column_config.TextColumn(width="medium"),
+                    'Type': st.column_config.TextColumn(width="medium"),
+                    'Role': st.column_config.TextColumn(width="medium"),
+                    'Job Description': st.column_config.TextColumn(width="medium"),
+                    'Feedback': st.column_config.TextColumn(width="large")
+                }
+            )
+            
+            # Option to export feedback history
+            if st.button("Export Feedback History", key="export_feedback_btn"):
+                export_data = feedback_df.to_csv(index=False)
+                st.download_button(
+                    label="Download CSV",
+                    data=export_data,
+                    file_name="feedback_history.csv",
+                    mime="text/csv",
+                    key="download_feedback_history"
+                )
+        else:
+            st.info("No feedback history available yet.")
+    else:
+        # Show placeholder for missing logger
+        st.warning("Feedback history tracking is not available.")
         
-        # Add to feedback data
-        feedback_data.append({
-            "ID": i + 1,
-            "Time": formatted_time,
-            "Type": feedback_type,
-            "Role": feedback_role,
-            "Job Description": state_manager.get('jd_repository', {}).get('source_name', 'Unknown'),
-            "Feedback": feedback_text
-        })
-    
-    # Create filtering options
-    st.subheader("Filter Feedback")
-    
-    # Create filter columns
-    filter_col1, filter_col2 = st.columns(2)
-    
-    with filter_col1:
-        # Get unique feedback types
-        feedback_types = sorted(list(set(item["Type"] for item in feedback_data)))
-        selected_types = st.multiselect("Filter by Type:", feedback_types, default=[], key="filter_types")
-    
-    with filter_col2:
-        # Get unique roles
-        roles = sorted(list(set(item["Role"] for item in feedback_data)))
-        selected_roles = st.multiselect("Filter by Role:", roles, default=[], key="filter_roles")
-    
-    # Text search
-    search_term = st.text_input("Search in feedback:", "", key="feedback_search")
-    
-    # Apply filters
-    filtered_data = feedback_data
-    
-    if selected_types:
-        filtered_data = [item for item in filtered_data if item["Type"] in selected_types]
-    
-    if selected_roles:
-        filtered_data = [item for item in filtered_data if item["Role"] in selected_roles]
-    
-    if search_term:
-        filtered_data = [item for item in filtered_data if search_term.lower() in item["Feedback"].lower()]
-    
-    # Convert to DataFrame for display
-    df = pd.DataFrame(filtered_data)
-    
-    # Display filter summary
-    st.write(f"Showing {len(filtered_data)} of {len(feedback_data)} feedback items")
-    
-    # Display the table
-    if not df.empty:
-        # Configure columns for display
-        column_config = {
-            "ID": st.column_config.NumberColumn("ID", help="Feedback ID"),
-            "Time": st.column_config.TextColumn("Time", help="When feedback was provided"),
-            "Type": st.column_config.TextColumn("Type", help="Type of feedback"),
-            "Role": st.column_config.TextColumn("Role", help="Role of the person who provided feedback"),
-            "Job Description": st.column_config.TextColumn("JD", help="Job description the feedback was for"),
-            "Feedback": st.column_config.TextColumn("Feedback Content", width="large")
+        # Display dummy data for preview
+        dummy_data = {
+            'ID': [1, 2, 3],
+            'Time': ['2023-04-01 10:15:22', '2023-04-02 14:30:45', '2023-04-03 09:20:10'],
+            'Type': ['Client Feedback', 'Hiring Manager Feedback', 'General Feedback'],
+            'Role': ['Recruiter', 'Hiring Manager', 'HR Manager'],
+            'Job Description': ['SoftwareDeveloper.txt', 'SoftwareDeveloper.txt', 'DataEngineer.txt'],
+            'Feedback': [
+                'Please add more emphasis on cloud technologies.',
+                'We need to specify 5+ years of experience in the requirements.',
+                'Update the job title to Senior Data Engineer for more visibility.'
+            ]
         }
         
         st.dataframe(
-            df,
-            use_container_width=True,
-            column_config=column_config,
-            hide_index=True
+            pd.DataFrame(dummy_data),
+            height=400,
+            use_container_width=True
         )
-        
-        # Export option
-        csv = df.to_csv(index=False)
-        st.download_button(
-            label="📥 Export Filtered Feedback",
-            data=csv,
-            file_name=f"feedback_export_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv"
-        )
-    else:
-        st.info("No feedback matches the selected filters.")

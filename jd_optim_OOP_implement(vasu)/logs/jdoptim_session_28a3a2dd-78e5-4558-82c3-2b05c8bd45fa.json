@@ -1,7 +1,7 @@
 {
-  "session_id": "483922e0-7108-4593-8585-9403f69e42cb",
+  "session_id": "28a3a2dd-78e5-4558-82c3-2b05c8bd45fa",
   "username": "Recruiter",
-  "session_start_time": "2025-04-02T15:15:13.647548",
+  "session_start_time": "2025-04-03T12:15:34.584048",
   "selected_file": "",
   "original_content": "",
   "enhanced_versions": [
@@ -14,132 +14,37 @@
   "actions": [
     {
       "action": "versions_generated",
-      "timestamp": "2025-04-02T15:15:18.485440",
+      "timestamp": "2025-04-03T12:15:38.574448",
       "count": 3
     },
     {
       "action": "versions_generated",
-      "timestamp": "2025-04-02T15:15:21.299885",
+      "timestamp": "2025-04-03T12:15:39.685202",
       "count": 3
     },
     {
       "action": "versions_generated",
-      "timestamp": "2025-04-02T15:15:22.315977",
+      "timestamp": "2025-04-03T12:15:40.398938",
       "count": 3
     },
     {
       "action": "versions_generated",
-      "timestamp": "2025-04-02T15:15:24.348913",
+      "timestamp": "2025-04-03T12:15:40.632238",
       "count": 3
     },
     {
       "action": "versions_generated",
-      "timestamp": "2025-04-02T15:16:34.805336",
+      "timestamp": "2025-04-03T12:15:40.887421",
       "count": 3
     },
     {
       "action": "versions_generated",
-      "timestamp": "2025-04-02T15:16:36.178864",
+      "timestamp": "2025-04-03T12:15:51.133642",
       "count": 3
     },
     {
       "action": "versions_generated",
-      "timestamp": "2025-04-02T15:16:36.958881",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:16:37.297905",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:16:37.618466",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:16:37.957695",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:16:39.031997",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:16:39.367124",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:16:39.636489",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:17:07.154425",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:17:09.037254",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:19:36.413340",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:19:38.644187",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:19:38.978775",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:19:39.451648",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:19:39.968902",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:19:40.403610",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:19:46.906417",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:48:13.936703",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:48:14.487656",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:48:14.824809",
-      "count": 3
-    },
-    {
-      "action": "versions_generated",
-      "timestamp": "2025-04-02T15:48:15.299157",
+      "timestamp": "2025-04-03T12:15:51.552560",
       "count": 3
     }
   ],

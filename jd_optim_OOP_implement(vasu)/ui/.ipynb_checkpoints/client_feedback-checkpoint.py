@@ -134,7 +134,7 @@ def render_client_feedback_page(services):
         
         # 2. Select from directory tab
         with feedback_tabs[1]:
-            feedback_directory = os.path.join(os.getcwd(), "Feedbacks")
+            feedback_directory = os.path.join(os.getcwd(), "Data/Feedbacks")
             
             if not os.path.exists(feedback_directory):
                 display_warning_message("The 'Feedbacks' directory does not exist. Create it or upload a file directly.")

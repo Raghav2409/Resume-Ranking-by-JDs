@@ -16,8 +16,8 @@ class ResumeAnalyzer:
         self.vectorizer = TfidfVectorizer()
         # Get the base directory (where your app is running)
         self.base_dir = os.getcwd()
-        # Define the specific path to the Exctracted Resumes folder
-        self.resume_dir = os.path.join(self.base_dir, "Exctracted Resumes")
+        # Define the specific path to the Extracted Resumes folder
+        self.resume_dir = os.path.join(self.base_dir, "Data", "Extracted Resumes")
     
     def compute_similarity(self, job_desc, resume_df):
         """
@@ -152,35 +152,26 @@ class ResumeAnalyzer:
             DataFrame: DataFrame containing resume data
         """
         try:
-            # Check if the specific Exctracted Resumes directory exists
+            # Check if the specific Extracted Resumes directory exists
             if os.path.exists(self.resume_dir) and os.path.isdir(self.resume_dir):
-                st.info(f"Using resume directory: Exctracted Resumes")
+                st.info(f"Using resume directory: Data/Extracted Resumes")
                 resume_files = [f for f in os.listdir(self.resume_dir) if f.endswith('.csv')]
             else:
-                # Fallback to looking in the current directory
-                st.warning("'Exctracted Resumes' directory not found. Looking for resume files in the current directory.")
-                resume_files = [f for f in os.listdir(self.base_dir) if f.endswith('.csv') and 'resume' in f.lower()]
-            
-            # If still no files found, try alternative paths
-            if not resume_files:
-                # Try to find any CSV files that might contain resume data
-                alt_paths = [
-                    os.path.join(self.base_dir, "Extracted Resumes"),
-                    os.path.join(self.base_dir, "Resumes"),
-                    os.path.join(self.base_dir, "data"),
-                    self.base_dir
-                ]
+                # Fallback to looking in the Data directory
+                data_dir = os.path.join(self.base_dir, "Data")
+                st.warning("'Data/Extracted Resumes' directory not found. Looking for resume files in the Data directory.")
+                resume_files = []
+                for root, _, files in os.walk(data_dir):
+                    for file in files:
+                        if file.endswith('.csv') and ('resume' in file.lower() or 'analysis' in file.lower()):
+                            resume_files.append(os.path.join(root, file))
                 
-                for path in alt_paths:
-                    if os.path.exists(path) and os.path.isdir(path):
-                        path_files = [f for f in os.listdir(path) if f.endswith('.csv')]
-                        if path_files:
-                            st.info(f"Found resume files in alternative directory: {os.path.basename(path)}")
-                            resume_files = path_files
-                            self.resume_dir = path  # Update the resume directory
-                            break
+                # If found resume files, update resume_dir
+                if resume_files:
+                    common_dir = os.path.commonpath([os.path.dirname(f) for f in resume_files])
+                    self.resume_dir = common_dir
             
-            # If still no files, try specific file names based on jd_type
+            # If still no files found, try specific file names based on jd_type
             if not resume_files and jd_type:
                 default_files = {
                     "java_developer": ["resumes_analysis_outputJDJavaDeveloper.csv", "java_resumes.csv"],
@@ -191,29 +182,46 @@ class ResumeAnalyzer:
                 default_file_list = default_files.get(jd_type, ["resumes_analysis_output.csv"])
                 
                 for file_name in default_file_list:
-                    if os.path.exists(os.path.join(self.base_dir, file_name)):
-                        resume_files = [file_name]
-                        self.resume_dir = self.base_dir
-                        st.info(f"Using default resume file for {jd_type}: {file_name}")
+                    # Try in Data/Extracted Resumes
+                    potential_path = os.path.join(self.base_dir, "Data", "Extracted Resumes", file_name)
+                    if os.path.exists(potential_path):
+                        resume_files = [potential_path]
+                        self.resume_dir = os.path.join(self.base_dir, "Data", "Extracted Resumes")
+                        st.info(f"Using resume file for {jd_type}: {file_name}")
                         break
+                    
+                    # Try in base/Data directory recursively
+                    for root, _, files in os.walk(os.path.join(self.base_dir, "Data")):
+                        if file_name in files:
+                            resume_files = [os.path.join(root, file_name)]
+                            self.resume_dir = root
+                            st.info(f"Found resume file for {jd_type}: {file_name}")
+                            break
             
             if not resume_files:
                 st.warning("No resume CSV files found. Using sample data.")
                 return self.create_sample_resume_df()
             
+            # If resume files are full paths, get basenames for display
+            resume_files_display = [os.path.basename(f) if os.path.isabs(f) else f for f in resume_files]
+            
             # Let user select a file from dropdown
-            selected_file = st.selectbox(
+            selected_file_display = st.selectbox(
                 "Select Resume Data File:",
-                options=resume_files,
+                options=resume_files_display,
                 help="Choose a CSV file containing resume data"
             )
             
-            # Determine the full path to the selected file
-            file_path = os.path.join(self.resume_dir, selected_file)
+            # Get the full path of the selected file
+            selected_file = next((f for f in resume_files if os.path.basename(f) == selected_file_display or f == selected_file_display), None)
+            
+            if not selected_file:
+                st.error("Selected file path could not be determined.")
+                return self.create_sample_resume_df()
             
             # Read the selected CSV file
             try:
-                resume_df = pd.read_csv(file_path)
+                resume_df = pd.read_csv(selected_file)
                 
                 # Ensure required columns exist
                 for col in ['File Name', 'Skills', 'Tools', 'Certifications']:
@@ -222,7 +230,7 @@ class ResumeAnalyzer:
                 
                 return resume_df
             except Exception as e:
-                st.error(f"Error reading file {file_path}: {str(e)}")
+                st.error(f"Error reading file {selected_file}: {str(e)}")
                 return self.create_sample_resume_df()
         
         except Exception as e:
@@ -341,4 +349,4 @@ class ResumeAnalyzer:
         
         if processed_resumes:
             return pd.DataFrame(processed_resumes)
-        return None
+        return None--

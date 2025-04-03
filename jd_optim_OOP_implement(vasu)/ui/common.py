@@ -242,8 +242,60 @@ def render_jd_selector(state_manager, services, context=""):
                 return False
     
     elif selected_source == "📁 File Selection":
-        jd_directory = os.path.join(os.getcwd(), "JDs")
+        jd_directory = os.path.join(os.getcwd(), "Data", "JDs")
         try:
+            if not os.path.exists(jd_directory):
+                os.makedirs(jd_directory, exist_ok=True)
+                st.info("Data/JDs")
+                
+                # Create sample files for demo if needed
+                if len(os.listdir(jd_directory)) == 0:
+                    sample_jds = {
+                        "SoftwareDeveloper.txt": """
+                        Software Developer
+                        
+                        Responsibilities:
+                        - Design, develop and maintain high-quality software
+                        - Write clean, efficient, and well-documented code
+                        - Collaborate with cross-functional teams
+                        - Debug and fix issues in existing applications
+                        - Implement new features and improvements
+                        
+                        Requirements:
+                        - Bachelor's degree in Computer Science or related field
+                        - Proficiency in Python, Java, or JavaScript
+                        - Knowledge of software development methodologies
+                        - Strong problem-solving skills
+                        - Experience with Git and CI/CD pipelines
+                        """,
+                        
+                        "DataEngineer.txt": """
+                        Data Engineer
+                        
+                        Responsibilities:
+                        - Design, build and maintain data pipelines
+                        - Develop ETL processes for data integration
+                        - Create and optimize database schemas
+                        - Ensure data quality and integrity
+                        - Collaborate with data scientists and analysts
+                        
+                        Requirements:
+                        - Bachelor's degree in Computer Science or related field
+                        - Experience with SQL and NoSQL databases
+                        - Proficiency in Python, Scala, or Java
+                        - Knowledge of big data technologies (Hadoop, Spark)
+                        - Experience with cloud platforms (AWS, Azure, GCP)
+                        """
+                    }
+                    
+                    # Write sample files
+                    for filename, content in sample_jds.items():
+                        file_path = os.path.join(jd_directory, filename)
+                        with open(file_path, "w") as f:
+                            f.write(content)
+                    
+                    st.success("Created sample job description files!")
+            
             files = [f for f in os.listdir(jd_directory) if f.endswith(('.txt', '.docx'))]
             
             if files:
@@ -266,10 +318,10 @@ def render_jd_selector(state_manager, services, context=""):
                         st.error(f"Error reading file: {str(e)}")
                         return False
             else:
-                st.info("No job description files found in the JDs directory.")
+                st.info("No job description files found in the Data/JDs directory.")
                 return False
         except FileNotFoundError:
-            st.info("Directory 'JDs' not found. Please create it or use the upload option.")
+            st.info("Directory 'Data/JDs' not found. Please create it or use the upload option.")
             return False
     
     elif selected_source == "📤 Upload New":
@@ -285,11 +337,22 @@ def render_jd_selector(state_manager, services, context=""):
                 if uploaded_file.name.endswith('.txt'):
                     file_content = uploaded_file.getvalue().decode('utf-8')
                 else:  # .docx
+                    from utils.file_utils import process_uploaded_docx
                     file_content = process_uploaded_docx(uploaded_file)
                 
                 jd_content = file_content
                 jd_source_name = uploaded_file.name
                 jd_unique_id = f"upload_{uploaded_file.name}"
+                
+                # Save to Data/JDs directory for future use
+                jd_dir = os.path.join(os.getcwd(), "Data", "JDs")
+                os.makedirs(jd_dir, exist_ok=True)
+                save_path = os.path.join(jd_dir, uploaded_file.name)
+                
+                with open(save_path, 'wb') as f:
+                    f.write(uploaded_file.getvalue())
+                
+                st.success(f"Saved {uploaded_file.name} to Data/JDs directory for future use.")
             except Exception as e:
                 st.error(f"Error processing uploaded file: {str(e)}")
                 return False

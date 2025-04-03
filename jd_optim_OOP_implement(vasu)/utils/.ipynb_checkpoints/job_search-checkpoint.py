@@ -536,13 +536,55 @@ class JobSearchUtility:
 
 
 def find_data_files():
-    """Find CSV and Excel files in the working directory that might contain job data"""
-    data_files = [f for f in os.listdir() if f.endswith(('.csv', '.xlsx', '.xls'))]
+    """Find CSV and Excel files in the Data directory that might contain job data"""
+    # Check if Data directory exists
+    data_dir = os.path.join(os.getcwd(), "Data")
+    if not os.path.exists(data_dir):
+        return [], []
     
-    position_report_candidates = [f for f in data_files if 'position' in f.lower() or 'report' in f.lower()]
-    job_listing_candidates = [f for f in data_files if 'job' in f.lower() or 'listing' in f.lower()]
+    # First try to find files in the expected subdirectories
+    position_report_dir = os.path.join(data_dir, "Data Set", "Position Report")
+    job_listing_dir = os.path.join(data_dir, "Data Set", "Job Listing")
     
-    # If no specific matches, return all files
+    position_report_candidates = []
+    job_listing_candidates = []
+    
+    # Check Position Report directory
+    if os.path.exists(position_report_dir):
+        position_report_candidates = [os.path.join(position_report_dir, f) 
+                                     for f in os.listdir(position_report_dir) 
+                                     if f.endswith(('.csv', '.xlsx', '.xls'))]
+    
+    # Check Job Listing directory
+    if os.path.exists(job_listing_dir):
+        job_listing_candidates = [os.path.join(job_listing_dir, f) 
+                                 for f in os.listdir(job_listing_dir) 
+                                 if f.endswith(('.csv', '.xlsx', '.xls'))]
+    
+    # If no matches found in specific directories, look in general Data directory
+    if not position_report_candidates or not job_listing_candidates:
+        data_files = []
+        for root, _, files in os.walk(data_dir):
+            for file in files:
+                if file.endswith(('.csv', '.xlsx', '.xls')):
+                    data_files.append(os.path.join(root, file))
+        
+        # Filter by filename patterns
+        if not position_report_candidates:
+            position_report_candidates = [f for f in data_files if 'position' in os.path.basename(f).lower() 
+                                         or 'report' in os.path.basename(f).lower()]
+        
+        if not job_listing_candidates:
+            job_listing_candidates = [f for f in data_files if 'job' in os.path.basename(f).lower() 
+                                     or 'listing' in os.path.basename(f).lower()]
+    
+    # If still no specific matches, return all Excel/CSV files
+    data_files = []
+    for root, _, files in os.walk(data_dir):
+        for file in files:
+            if file.endswith(('.csv', '.xlsx', '.xls')):
+                data_files.append(os.path.join(root, file))
+                
     if not position_report_candidates:
         position_report_candidates = data_files
     
@@ -583,6 +625,16 @@ def render_job_search_section(state_manager):
         if len(position_report_candidates) == 0 or len(job_listing_candidates) == 0:
             display_warning_message("No data files found. Please upload the position report and job listing files.")
             
+            # Create Data directory structure if it doesn't exist
+            data_dir = os.path.join(os.getcwd(), "Data")
+            data_set_dir = os.path.join(data_dir, "Data Set")
+            position_report_dir = os.path.join(data_set_dir, "Position Report")
+            job_listing_dir = os.path.join(data_set_dir, "Job Listing")
+            
+            # Create directories if they don't exist
+            os.makedirs(position_report_dir, exist_ok=True)
+            os.makedirs(job_listing_dir, exist_ok=True)
+            
             # Add file uploaders
             position_report_file = st.file_uploader(
                 "Upload Position Report File",
@@ -601,17 +653,17 @@ def render_job_search_section(state_manager):
                 position_file_ext = os.path.splitext(position_report_file.name)[1]
                 job_file_ext = os.path.splitext(job_listings_file.name)[1]
                 
-                position_temp_path = f"position_report{position_file_ext}"
-                job_temp_path = f"job_listings{job_file_ext}"
+                position_file_path = os.path.join(position_report_dir, f"position_report{position_file_ext}")
+                job_file_path = os.path.join(job_listing_dir, f"job_listings{job_file_ext}")
                 
-                with open(position_temp_path, "wb") as f:
+                with open(position_file_path, "wb") as f:
                     f.write(position_report_file.getvalue())
                 
-                with open(job_temp_path, "wb") as f:
+                with open(job_file_path, "wb") as f:
                     f.write(job_listings_file.getvalue())
                 
                 if st.button("Initialize Job Search", key="upload_init_btn"):
-                    success = job_search.load_data_files(position_temp_path, job_temp_path)
+                    success = job_search.load_data_files(position_file_path, job_file_path)
                     if success:
                         state_manager.set('job_search_initialized', True)
                         display_success_message("Files loaded successfully!")
@@ -626,22 +678,26 @@ def render_job_search_section(state_manager):
             st.markdown("**Select Position Report File**")
             position_file = st.selectbox(
                 "File containing Parent Id and Job Description",
-                options=position_report_candidates,
+                options=[os.path.basename(f) for f in position_report_candidates],
                 key="position_report_file"
             )
+            # Get the full path
+            position_file_path = next((f for f in position_report_candidates if os.path.basename(f) == position_file), None)
         
         with col2:
             st.markdown("**Select Job Listings File**")
             job_file = st.selectbox(
                 "File containing Job Id, Reference Id, etc.",
-                options=job_listing_candidates,
+                options=[os.path.basename(f) for f in job_listing_candidates],
                 key="job_listings_file"
             )
+            # Get the full path
+            job_file_path = next((f for f in job_listing_candidates if os.path.basename(f) == job_file), None)
         
         # Initialize button
         if st.button("Initialize Job Search", key="init_job_search"):
             with st.spinner("Loading job data..."):
-                success = job_search.load_data_files(position_file, job_file)
+                success = job_search.load_data_files(position_file_path, job_file_path)
                 
                 if success:
                     state_manager.set('job_search_initialized', True)
