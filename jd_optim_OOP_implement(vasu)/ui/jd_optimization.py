@@ -136,7 +136,7 @@ def render_jd_optimization_page(services):
                         file_path = os.path.join(jd_directory, selected_file)
                         
                         try:
-                            #file_content = read_job_description(file_path)
+                            file_content = read_job_description(file_path)
                             jd_content = file_content
                             jd_source_name = selected_file
                             jd_unique_id = f"file_{selected_file}"
