@@ -316,7 +316,7 @@ def detect_jd_type(file_name):
 
 def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_manager):
     """
-    Handle different resume pool selection options with improved file finding
+    Handle different resume pool selection options
     
     Args:
         selection (str): Selected pool option
@@ -327,18 +327,39 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_mana
     Returns:
         DataFrame or None: Resume DataFrame or None if still in selection process
     """
-    from utils.resume_finder import get_resume_data_for_jd_type
     resume_repository = state_manager.get('resume_repository', {})
     
     if selection == "(Auto Selection)":
-        # Auto-select resume pool based on JD type using our new function
-        try:
-            resume_df = get_resume_data_for_jd_type(jd_type)
-            st.success(f"Loaded resume pool based on job type ({jd_type})")
-            return resume_df
-        except Exception as e:
-            st.error(f"Error loading resume data: {str(e)}")
-            # Fall back to sample data
+        # Auto-select resume pool based on JD type
+        default_file_map = {
+            "java_developer": "resumes_analysis_outputJDJavaDeveloper.csv",
+            "data_engineer": "resumes_analysis_output_JDPrincipalSoftwareEngineer.csv",
+            "general": "resumes_analysis_output.csv",
+            "unknown": "resumes_analysis_output.csv"
+        }
+        
+        default_file = default_file_map.get(jd_type, "resumes_analysis_output.csv")
+        
+        if os.path.exists(default_file):
+            try:
+                resume_df = pd.read_csv(default_file)
+                st.success(f"Loaded default resume pool based on job type ({jd_type})")
+                return resume_df
+            except Exception as e:
+                st.error(f"Error loading default resume file: {e}")
+                return None
+        else:
+            # Try finding similar files
+            possible_files = [f for f in os.listdir() if f.endswith('.csv') and 'resume' in f.lower()]
+            if possible_files:
+                try:
+                    resume_df = pd.read_csv(possible_files[0])
+                    st.info(f"Using alternative resume file: {possible_files[0]}")
+                    return resume_df
+                except Exception:
+                    pass
+            
+            st.warning("Default resume pool file not found.")
             return create_sample_resume_df()
     
     elif selection == "Upload New Resume Pool":
@@ -346,7 +367,7 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_mana
         new_pool_name = st.text_input("Enter new pool name:", key="new_pool_name")
         new_pool_files = st.file_uploader(
             "Upload resumes for the new pool", 
-            type=['docx', 'pdf', 'txt'], 
+            type=['docx'], 
             accept_multiple_files=True, 
             key="new_pool_files"
         )
@@ -375,20 +396,24 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_mana
         return None  # Return None to indicate we're still in the upload phase
     
     elif selection in ["General", "Data Engineer", "Java Developer"]:
-        # Use our new function to find and load resumes for the selected type
-        try:
-            type_map = {
-                "General": "general",
-                "Data Engineer": "data_engineer",
-                "Java Developer": "java_developer"
-            }
-            mapped_type = type_map.get(selection, "general")
-            
-            resume_df = get_resume_data_for_jd_type(mapped_type)
-            st.success(f"Loaded {selection} resume pool")
-            return resume_df
-        except Exception as e:
-            st.error(f"Error loading resume file: {str(e)}")
+        # Load from predefined files
+        generic_map = {
+            "General": "resumes_analysis_output.csv",
+            "Data Engineer": "resumes_analysis_output_JDPrincipalSoftwareEngineer.csv",
+            "Java Developer": "resumes_analysis_outputJDJavaDeveloper.csv"
+        }
+        default_file = generic_map[selection]
+        
+        if os.path.exists(default_file):
+            try:
+                resume_df = pd.read_csv(default_file)
+                st.success(f"Loaded {selection} resume pool")
+                return resume_df
+            except Exception as e:
+                st.error(f"Error loading resume file: {e}")
+                return None
+        else:
+            st.warning(f"Resume pool file for {selection} not found.")
             return create_sample_resume_df()
     
     else:

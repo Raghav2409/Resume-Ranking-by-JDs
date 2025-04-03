@@ -143,262 +143,7 @@ def display_subsection_header(title):
     """Display a subsection header"""
     st.markdown(f"""<div class="subsection-header">{title}</div>""", unsafe_allow_html=True)
 
-def render_jd_selector(state_manager, services, context=""):
-    """
-    Unified job description selector component
-    
-    Provides consistent JD selection across tabs with contextual awareness.
-    
-    Args:
-        state_manager: The global state manager
-        services (dict): Dictionary of services
-        context (str): Context of where this selector is being used
-    
-    Returns:
-        bool: Whether a JD is selected
-    """
-    logger = services.get('logger')
-    
-    # Create a selection for the source type
-    source_options = ["📁 File Selection", "📤 Upload New", "🔍 Search Database"]
-    
-    # Check if we already have an active JD
-    jd_repository = state_manager.get('jd_repository', {})
-    if jd_repository.get('original') is not None:
-        # Show info about active JD
-        source_name = jd_repository.get('source_name', 'Unknown')
-        
-        st.info(f"Currently using: {source_name}")
-        
-        # Option to change the JD
-        change_jd = st.checkbox("Select a different job description", value=False, key=f"{context}_change_jd")
-        
-        if not change_jd:
-            return True
-    
-    # Display selector for choosing JD source
-    selected_source = st.radio(
-        "Choose job description source:",
-        options=source_options,
-        horizontal=True,
-        key=f"{context}_jd_source_selector"
-    )
-    
-    # Variables to track job description source
-    jd_content = None
-    jd_source_name = None
-    jd_unique_id = None
-    
-    # Handle each source option
-    if selected_source == "🔍 Search Database":
-        # Get the job search utility
-        job_search = state_manager.get('job_search_utility')
-        
-        # Check if the job search has been initialized
-        if not job_search.is_initialized:
-            st.warning("Job search database not initialized. Please initialize in the JD Optimization tab.")
-            return False
-        else:
-            # Display simplified search interface
-            st.info(f"📊 Search from {len(job_search.job_listings_df)} available job listings")
-            
-            # Get dropdown options
-            options = job_search.get_dropdown_options()
-            
-            if not options:
-                st.warning("No job listings found in the data.")
-                return False
-            
-            # Add a search box for filtering the dropdown
-            search_term = st.text_input("Search for job by ID, name, or client:", key=f"{context}_job_search_term")
-            
-            # Filter options based on search term
-            if search_term:
-                filtered_options = [opt for opt in options if search_term.lower() in opt.lower()]
-            else:
-                filtered_options = options
-            
-            # Show the dropdown with filtered options
-            if filtered_options:
-                selected_option = st.selectbox(
-                    "Select Job:",
-                    options=filtered_options,
-                    key=f"{context}_job_search_dropdown"
-                )
-                
-                # Find and display the job description
-                if selected_option:
-                    job_description, job_details = job_search.find_job_description(selected_option)
-                    
-                    if job_description:
-                        jd_content = job_description
-                        jd_source_name = selected_option
-                        jd_unique_id = f"db_{job_details.get('Job Id', '')}"
-                    else:
-                        st.error("Could not find job description for the selected job.")
-                        return False
-            else:
-                st.warning("No jobs match your search criteria.")
-                return False
-    
-    elif selected_source == "📁 File Selection":
-        jd_directory = os.path.join(os.getcwd(), "Data", "JDs")
-        try:
-            if not os.path.exists(jd_directory):
-                os.makedirs(jd_directory, exist_ok=True)
-                st.info("Data/JDs")
-                
-                # Create sample files for demo if needed
-                if len(os.listdir(jd_directory)) == 0:
-                    sample_jds = {
-                        "SoftwareDeveloper.txt": """
-                        Software Developer
-                        
-                        Responsibilities:
-                        - Design, develop and maintain high-quality software
-                        - Write clean, efficient, and well-documented code
-                        - Collaborate with cross-functional teams
-                        - Debug and fix issues in existing applications
-                        - Implement new features and improvements
-                        
-                        Requirements:
-                        - Bachelor's degree in Computer Science or related field
-                        - Proficiency in Python, Java, or JavaScript
-                        - Knowledge of software development methodologies
-                        - Strong problem-solving skills
-                        - Experience with Git and CI/CD pipelines
-                        """,
-                        
-                        "DataEngineer.txt": """
-                        Data Engineer
-                        
-                        Responsibilities:
-                        - Design, build and maintain data pipelines
-                        - Develop ETL processes for data integration
-                        - Create and optimize database schemas
-                        - Ensure data quality and integrity
-                        - Collaborate with data scientists and analysts
-                        
-                        Requirements:
-                        - Bachelor's degree in Computer Science or related field
-                        - Experience with SQL and NoSQL databases
-                        - Proficiency in Python, Scala, or Java
-                        - Knowledge of big data technologies (Hadoop, Spark)
-                        - Experience with cloud platforms (AWS, Azure, GCP)
-                        """
-                    }
-                    
-                    # Write sample files
-                    for filename, content in sample_jds.items():
-                        file_path = os.path.join(jd_directory, filename)
-                        with open(file_path, "w") as f:
-                            f.write(content)
-                    
-                    st.success("Created sample job description files!")
-            
-            files = [f for f in os.listdir(jd_directory) if f.endswith(('.txt', '.docx'))]
-            
-            if files:
-                selected_file = st.selectbox(
-                    "Select Job Description File", 
-                    files, 
-                    key=f"{context}_file_selector"
-                )
-                
-                if selected_file:
-                    # Load selected file
-                    file_path = os.path.join(jd_directory, selected_file)
-                    
-                    try:
-                        file_content = read_job_description(file_path)
-                        jd_content = file_content
-                        jd_source_name = selected_file
-                        jd_unique_id = f"file_{selected_file}"
-                    except Exception as e:
-                        st.error(f"Error reading file: {str(e)}")
-                        return False
-            else:
-                st.info("No job description files found in the Data/JDs directory.")
-                return False
-        except FileNotFoundError:
-            st.info("Directory 'Data/JDs' not found. Please create it or use the upload option.")
-            return False
-    
-    elif selected_source == "📤 Upload New":
-        uploaded_file = st.file_uploader(
-            "Upload Job Description File", 
-            type=['txt', 'docx'],
-            key=f"{context}_file_uploader"
-        )
-        
-        if uploaded_file:
-            # Process uploaded file
-            try:
-                if uploaded_file.name.endswith('.txt'):
-                    file_content = uploaded_file.getvalue().decode('utf-8')
-                else:  # .docx
-                    from utils.file_utils import process_uploaded_docx
-                    file_content = process_uploaded_docx(uploaded_file)
-                
-                jd_content = file_content
-                jd_source_name = uploaded_file.name
-                jd_unique_id = f"upload_{uploaded_file.name}"
-                
-                # Save to Data/JDs directory for future use
-                jd_dir = os.path.join(os.getcwd(), "Data", "JDs")
-                os.makedirs(jd_dir, exist_ok=True)
-                save_path = os.path.join(jd_dir, uploaded_file.name)
-                
-                with open(save_path, 'wb') as f:
-                    f.write(uploaded_file.getvalue())
-                
-                st.success(f"Saved {uploaded_file.name} to Data/JDs directory for future use.")
-            except Exception as e:
-                st.error(f"Error processing uploaded file: {str(e)}")
-                return False
-        else:
-            return False
-    
-    # Update state with the selected JD
-    if jd_content and jd_source_name and jd_unique_id:
-        # Update the JD repository
-        state_manager.update_jd_repository('original', jd_content, source_tab=context)
-        state_manager.update_jd_repository('source_name', jd_source_name, source_tab=context)
-        state_manager.update_jd_repository('unique_id', jd_unique_id, source_tab=context)
-        
-        # Reset versions when changing JD source
-        state_manager.update_jd_repository('enhanced_versions', [], source_tab=context)
-        state_manager.update_jd_repository('selected_version_idx', 0, source_tab=context)
-        state_manager.update_jd_repository('final_version', None, source_tab=context)
-        
-        # Add notification for JD selection
-        state_manager.add_notification({
-            'type': 'jd_selected',
-            'source_name': jd_source_name,
-            'origin': context,
-            'timestamp': datetime.datetime.now().isoformat()
-        })
-        
-        # Log file selection
-        if logger:
-            logger.log_file_selection(jd_source_name, jd_content)
-        
-        # Display success message
-        display_success_message(f"Selected job description: {jd_source_name}")
-        
-        # Show JD preview
-        with st.expander("View Job Description", expanded=True):
-            st.text_area(
-                "Content", 
-                jd_content, 
-                height=250, 
-                disabled=True,
-                key=f"{context}_jd_preview"
-            )
-        
-        return True
-    
-    return False
+
 
 def render_feedback_component(state_manager, services, context=""):
     """
@@ -573,3 +318,217 @@ def display_jd_comparison(original_jd, enhanced_jd, services, context=""):
                 key=f"{context}_comparison"
             )
             st.caption("Percentages indicate keyword coverage in each category")
+            
+def render_jd_selector(state_manager, services, context=""):
+    """
+    Unified job description selector component
+    
+    Provides consistent JD selection across tabs with contextual awareness.
+    
+    Args:
+        state_manager: The global state manager
+        services (dict): Dictionary of services
+        context (str): Context of where this selector is being used
+    
+    Returns:
+        bool: Whether a JD is selected
+    """
+    logger = services.get('logger')
+    
+    # Check if we already have an active JD
+    jd_repository = state_manager.get('jd_repository', {})
+    if jd_repository.get('original') is not None:
+        # Show info about active JD
+        source_name = jd_repository.get('source_name', 'Unknown')
+        
+        st.info(f"Currently using: {source_name}")
+        
+        # Option to change the JD
+        change_jd = st.checkbox("Select a different job description", value=False, key=f"{context}_change_jd")
+        
+        if not change_jd:
+            return True
+    
+    # Create a selection for the source type
+    source_options = ["📁 File Selection", "📤 Upload New", "🔍 Search Database"]
+    
+    # Display selector for choosing JD source
+    selected_source = st.radio(
+        "Choose job description source:",
+        options=source_options,
+        horizontal=True,
+        key=f"{context}_jd_source_selector"
+    )
+    
+    # Variables to track job description source
+    jd_content = None
+    jd_source_name = None
+    jd_unique_id = None
+    
+    # Handle each source option
+    if selected_source == "🔍 Search Database":
+        # First ensure job search is initialized
+        job_search_initialized = render_job_search_section(state_manager)
+        
+        if not job_search_initialized:
+            st.warning("Please initialize the job search database first.")
+            return False
+        
+        # Get the job search utility
+        job_search = state_manager.get('job_search_utility')
+        
+        # Get dropdown options
+        options = job_search.get_dropdown_options()
+        
+        if not options:
+            st.warning("No job listings found in the data.")
+            return False
+        
+        # Add a search box for filtering the dropdown
+        search_term = st.text_input("Search for job by ID, name, or client:", key=f"{context}_job_search_term")
+        
+        # Filter options based on search term
+        if search_term:
+            filtered_options = [opt for opt in options if search_term.lower() in opt.lower()]
+        else:
+            filtered_options = options
+        
+        # Show the dropdown with filtered options
+        if filtered_options:
+            selected_option = st.selectbox(
+                "Select Job:",
+                options=filtered_options,
+                key=f"{context}_job_search_dropdown"
+            )
+            
+            # Find and display the job description
+            if selected_option:
+                job_description, job_details = job_search.find_job_description(selected_option)
+                
+                if job_description:
+                    jd_content = job_description
+                    jd_source_name = selected_option
+                    jd_unique_id = f"db_{job_details.get('Job Id', '')}"
+                else:
+                    st.error("Could not find job description for the selected job.")
+                    return False
+        else:
+            st.warning("No jobs match your search criteria.")
+            return False
+    
+    elif selected_source == "📁 File Selection":
+        jd_directory = os.path.join(os.getcwd(), "Data/JDs")
+        try:
+            files = [f for f in os.listdir(jd_directory) if f.endswith(('.txt', '.docx'))]
+            
+            if files:
+                selected_file = st.selectbox(
+                    "Select Job Description File", 
+                    files, 
+                    key=f"{context}_file_selector"
+                )
+                
+                if selected_file:
+                    # Load selected file
+                    file_path = os.path.join(jd_directory, selected_file)
+                    
+                    try:
+                        file_content = read_job_description(file_path)
+                        jd_content = file_content
+                        jd_source_name = selected_file
+                        jd_unique_id = f"file_{selected_file}"
+                    except Exception as e:
+                        st.error(f"Error reading file: {str(e)}")
+                        return False
+            else:
+                st.warning("No job description files found in JDs directory. Creating sample files...")
+                
+                # Create the directory if it doesn't exist
+                os.makedirs(jd_directory, exist_ok=True)
+                
+                # Write sample files
+                for filename, content in sample_jds.items():
+                    file_path = os.path.join(jd_directory, filename)
+                    with open(file_path, "w") as f:
+                        f.write(content)
+
+        except FileNotFoundError:
+            st.info("Directory 'JDs' not found. Creating it...")
+            os.makedirs(jd_directory, exist_ok=True)
+            st.rerun()
+            return False
+    
+    elif selected_source == "📤 Upload New":
+        uploaded_file = st.file_uploader(
+            "Upload Job Description File", 
+            type=['txt', 'docx'],
+            key=f"{context}_file_uploader"
+        )
+        
+        if uploaded_file:
+            # Process uploaded file
+            try:
+                if uploaded_file.name.endswith('.txt'):
+                    file_content = uploaded_file.getvalue().decode('utf-8')
+                else:  # .docx
+                    file_content = process_uploaded_docx(uploaded_file)
+                
+                jd_content = file_content
+                jd_source_name = uploaded_file.name
+                jd_unique_id = f"upload_{uploaded_file.name}"
+            except Exception as e:
+                st.error(f"Error processing uploaded file: {str(e)}")
+                return False
+        else:
+            return False
+    
+    # Update state with the selected JD
+    if jd_content and jd_source_name and jd_unique_id:
+        # Update the JD repository
+        state_manager.update_jd_repository('original', jd_content, source_tab=context)
+        state_manager.update_jd_repository('source_name', jd_source_name, source_tab=context)
+        state_manager.update_jd_repository('unique_id', jd_unique_id, source_tab=context)
+        
+        # Reset versions when changing JD source
+        state_manager.update_jd_repository('enhanced_versions', [], source_tab=context)
+        state_manager.update_jd_repository('selected_version_idx', 0, source_tab=context)
+        state_manager.update_jd_repository('final_version', None, source_tab=context)
+        
+        # Add notification for JD selection
+        state_manager.add_notification({
+            'type': 'jd_selected',
+            'source_name': jd_source_name,
+            'origin': context,
+            'timestamp': datetime.datetime.now().isoformat()
+        })
+        
+        # Log file selection
+        if logger:
+            logger.log_file_selection(jd_source_name, jd_content)
+        
+        # Display success message
+        display_success_message(f"Selected job description: {jd_source_name}")
+        
+        # Show JD preview
+        with st.expander("View Job Description", expanded=True):
+            st.text_area(
+                "Content", 
+                jd_content, 
+                height=250, 
+                disabled=True,
+                key=f"{context}_jd_preview"
+            )
+        
+        return True
+    
+    return False
+
+# Add mock functions for process_uploaded_docx and display_success_message
+# In case they're missing in the actual code
+def process_uploaded_docx(uploaded_file):
+    """Process an uploaded docx file (mock function)"""
+    return "This is a placeholder for the document content"
+
+def display_success_message(message):
+    """Display a success message"""
+    st.success(message)

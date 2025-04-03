@@ -1,7 +1,6 @@
 import streamlit as st
 import datetime
 import json
-from utils.job_search import JobSearchUtility
 
 class StateManager:
     """
@@ -18,10 +17,6 @@ class StateManager:
         """Initialize the state manager with default values"""
         self.state_history = []
         self.last_update = datetime.datetime.now().isoformat()
-        
-        # Initialize job search utility if needed
-        if 'job_search_utility' not in st.session_state:
-            st.session_state['job_search_utility'] = JobSearchUtility()
     
     def get(self, key, default=None):
         """
@@ -34,10 +29,6 @@ class StateManager:
         Returns:
             Value from session state or default
         """
-        # Check for special case keys that need special handling
-        if key == 'job_search_utility' and 'job_search_utility' not in st.session_state:
-            st.session_state['job_search_utility'] = JobSearchUtility()
-        
         return st.session_state.get(key, default)
     
     def set(self, key, value, track_history=False, source_tab=None):
@@ -50,12 +41,6 @@ class StateManager:
             track_history (bool): Whether to track this change in history
             source_tab (str): Tab that initiated this change
         """
-        # Special handling for job search utility
-        if key == 'job_search_utility' and isinstance(value, JobSearchUtility):
-            # Ensure the value is properly initialized
-            if value.is_initialized:
-                st.session_state['job_search_initialized'] = True
-        
         # Store in session state
         st.session_state[key] = value
         
@@ -67,62 +52,6 @@ class StateManager:
                 'source_tab': source_tab
             })
             self.last_update = datetime.datetime.now().isoformat()
-    
-    def ensure_job_search_initialization(self):
-        """
-        Ensure job search utility is properly initialized across tabs
-        
-        Returns:
-            bool: True if job search is initialized, False otherwise
-        """
-        # Check if job search is already initialized
-        if st.session_state.get('job_search_initialized', False):
-            job_search = self.get('job_search_utility')
-            
-            # If job_search exists but isn't fully initialized, try to initialize it
-            if job_search and not job_search.is_initialized:
-                # Create dummy data for demonstration
-                import pandas as pd
-                
-                # Create sample position report data
-                job_search.position_report_df = pd.DataFrame({
-                    'Parent Id': ['1001', '1002', '1003', '1004', '1005'],
-                    'Job Description': [
-                        'Software Engineer with 5+ years experience in Python and Java...',
-                        'Data Scientist with strong background in machine learning...',
-                        'DevOps Engineer with expertise in AWS and CI/CD pipelines...',
-                        'Frontend Developer with React.js experience...',
-                        'Backend Developer with Node.js and MongoDB experience...'
-                    ]
-                })
-                
-                # Create sample job listings data
-                job_search.job_listings_df = pd.DataFrame({
-                    'Job Id': ['1001', '1002', '1003', '1004', '1005'],
-                    'Reference Id': ['REF1001', 'REF1002', 'REF1003', 'REF1004', 'REF1005'],
-                    'Job Name': [
-                        'Software Engineer', 
-                        'Data Scientist', 
-                        'DevOps Engineer', 
-                        'Frontend Developer',
-                        'Backend Developer'
-                    ],
-                    'Client': [
-                        'TechCorp Inc.', 
-                        'DataAnalytics Ltd.', 
-                        'CloudSystems Inc.', 
-                        'WebApp Solutions',
-                        'ServerTech Inc.'
-                    ]
-                })
-                
-                # Set as initialized
-                job_search.is_initialized = True
-                self.set('job_search_utility', job_search)
-            
-            return True
-            
-        return False
     
     def update_jd_repository(self, key, value, source_tab=None):
         """
@@ -239,8 +168,7 @@ class StateManager:
             'state_history': self.state_history,
             'last_update': self.last_update,
             'session_id': self.get('session_id'),
-            'role': self.get('role'),
-            'job_search_initialized': self.get('job_search_initialized', False)
+            'role': self.get('role')
         }
         
         return json.dumps(export_data, indent=2)
@@ -280,47 +208,8 @@ class StateManager:
                 
             if 'role' in import_data:
                 self.set('role', import_data['role'])
-                
-            if 'job_search_initialized' in import_data:
-                self.set('job_search_initialized', import_data['job_search_initialized'])
             
             return True
         except Exception as e:
             print(f"Error importing state: {e}")
             return False
-    
-    def handle_jd_selection(self, jd_content, jd_source_name, jd_unique_id, context=""):
-        """
-        Handle job description selection with proper state updates
-        
-        Args:
-            jd_content (str): Job description content
-            jd_source_name (str): Source name of the job description
-            jd_unique_id (str): Unique ID of the job description
-            context (str): Context where this function is called
-            
-        Returns:
-            bool: Success or failure
-        """
-        if not jd_content or not jd_source_name or not jd_unique_id:
-            return False
-            
-        # Update the JD repository
-        self.update_jd_repository('original', jd_content, source_tab=context)
-        self.update_jd_repository('source_name', jd_source_name, source_tab=context)
-        self.update_jd_repository('unique_id', jd_unique_id, source_tab=context)
-        
-        # Reset versions when changing JD source
-        self.update_jd_repository('enhanced_versions', [], source_tab=context)
-        self.update_jd_repository('selected_version_idx', 0, source_tab=context)
-        self.update_jd_repository('final_version', None, source_tab=context)
-        
-        # Add notification for JD selection
-        self.add_notification({
-            'type': 'jd_selected',
-            'source_name': jd_source_name,
-            'origin': context,
-            'timestamp': datetime.datetime.now().isoformat()
-        })
-        
-        return True
