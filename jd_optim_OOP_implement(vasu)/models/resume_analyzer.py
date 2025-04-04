@@ -17,7 +17,7 @@ class ResumeAnalyzer:
         # Get the base directory (where your app is running)
         self.base_dir = os.getcwd()
         # Define the specific path to the Extracted Resumes folder
-        self.resume_dir = os.path.join(self.base_dir, "Data", "Extracted Resumes")
+        self.resume_dir = os.path.join(self.base_dir, "Data/Extracted Resumes")
     
     def compute_similarity(self, job_desc, resume_df):
         """
@@ -349,4 +349,4 @@ class ResumeAnalyzer:
         
         if processed_resumes:
             return pd.DataFrame(processed_resumes)
-        return None--
+        return None

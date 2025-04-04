@@ -26,15 +26,35 @@ class JobSearchUtility:
         """
         try:
             # Load the Excel or CSV files based on extension
-            if position_report_path.endswith('Data/data Set/ Position Report/.xlsx') or position_report_path.endswith('Data/data Set/ Position Report/.xls'):
-                self.position_report_df = pd.read_excel(position_report_path)
+            if position_report_path.endswith('.xlsx') or position_report_path.endswith('.xls'):
+                try:
+                    self.position_report_df = pd.read_excel(position_report_path, engine='openpyxl')
+                except Exception as e:
+                    st.warning(f"Error with openpyxl engine: {str(e)}. Trying alternative engine...")
+                    # Fall back to xlrd engine if openpyxl fails
+                    self.position_report_df = pd.read_excel(position_report_path, engine='xlrd')
             else:
-                self.position_report_df = pd.read_csv(position_report_path)
+                # Try different encodings for CSV
+                try:
+                    self.position_report_df = pd.read_csv(position_report_path)
+                except UnicodeDecodeError:
+                    # If UTF-8 fails, try latin-1 encoding which is more permissive
+                    self.position_report_df = pd.read_csv(position_report_path, encoding='latin-1')
                 
-            if job_listings_path.endswith('Data/Data Set/ Job Listing/.xlsx') or job_listings_path.endswith('Data/Data Set/ Job Listing/.xls'):
-                self.job_listings_df = pd.read_excel(job_listings_path)
+            if job_listings_path.endswith('.xlsx') or job_listings_path.endswith('.xls'):
+                try:
+                    self.job_listings_df = pd.read_excel(job_listings_path, engine='openpyxl')
+                except Exception as e:
+                    st.warning(f"Error with openpyxl engine: {str(e)}. Trying alternative engine...")
+                    # Fall back to xlrd engine if openpyxl fails
+                    self.job_listings_df = pd.read_excel(job_listings_path, engine='xlrd')
             else:
-                self.job_listings_df = pd.read_csv(job_listings_path)
+                # Try different encodings for CSV
+                try:
+                    self.job_listings_df = pd.read_csv(job_listings_path)
+                except UnicodeDecodeError:
+                    # If UTF-8 fails, try latin-1 encoding
+                    self.job_listings_df = pd.read_csv(job_listings_path, encoding='latin-1')
             
             # Convert IDs to string for consistent matching
             if 'Parent Id' in self.position_report_df.columns:
@@ -133,7 +153,7 @@ class JobSearchUtility:
     
     def get_dropdown_options(self):
         """
-        Get formatted options for the dropdown in the format: RRID[Job Id]_[Job Name]_[Client]
+        Get formatted options for the dropdown with status indicators
         
         Returns:
             list: List of formatted dropdown options
@@ -150,8 +170,23 @@ class JobSearchUtility:
             job_name = str(row.get('Job Name', '')) if 'Job Name' in row else ''
             client = str(row.get('Client', '')) if 'Client' in row else ''
             
-            # Format the dropdown option
-            option = f"RRID{job_id}_{job_name}_{client}"
+            # Get job status if available and add appropriate emoji
+            status_emoji = ""
+            if 'Job Status' in self.job_listings_df.columns:
+                status = str(row['Job Status']).lower()
+                if 'active' in status:
+                    status_emoji = "🟢 "  # Green circle for active
+                elif 'closed' in status:
+                    status_emoji = "🔴 "  # Red circle for closed
+                elif 'hold' in status:
+                    status_emoji = "🟠 "  # Orange circle for on hold
+                elif 'new' in status:
+                    status_emoji = "🔵 "  # Blue circle for new
+                else:
+                    status_emoji = "⚪ "  # White circle for unknown
+            
+            # Format the dropdown option with status indicator
+            option = f"{status_emoji}RRID{job_id}_{job_name}_{client}"
             
             # Add to options list
             options.append(option)
@@ -163,7 +198,7 @@ class JobSearchUtility:
         Extract Job Id and other IDs from the selected dropdown option
         
         Args:
-            selected_option (str): The selected dropdown option in format RRID[Job Id]_[Job Name]_[Client]
+            selected_option (str): The selected dropdown option with optional status emoji
             
         Returns:
             dict: Dictionary containing extracted IDs
@@ -175,13 +210,16 @@ class JobSearchUtility:
             'client': ''
         }
         
+        # Remove any emoji prefix if present
+        clean_option = re.sub(r'^[^\w]*', '', selected_option)
+        
         # Extract Job ID from the format: RRID[Job Id]_[Job Name]_[Client]
-        job_id_match = re.search(r"RRID([^_]+)_", selected_option)
+        job_id_match = re.search(r"RRID([^_]+)_", clean_option)
         if job_id_match:
             extracted['job_id'] = job_id_match.group(1)
         
         # Extract job name and client
-        parts = selected_option.split('_')
+        parts = clean_option.split('_')
         if len(parts) >= 2:
             # Job name might be the second part (after removing RRID prefix)
             job_name_part = parts[1]
@@ -222,34 +260,55 @@ class JobSearchUtility:
         # Get reference ID from the matching job
         reference_id = matching_job['Refrence Id'].iloc[0] if 'Refrence Id' in matching_job.columns else None
         
+        # Get job status if available
+        job_status = matching_job['Job Status'].iloc[0] if 'Job Status' in matching_job.columns else 'Unknown'
+        
+        # Format status with colored indicator
+        status_display = job_status
+        if job_status:
+            status_lower = str(job_status).lower()
+            if 'active' in status_lower:
+                status_display = "🟢 Active"
+            elif 'closed' in status_lower:
+                status_display = "🔴 Closed"
+            elif 'hold' in status_lower:
+                status_display = "🟠 On Hold"
+            elif 'new' in status_lower:
+                status_display = "🔵 New"
+            else:
+                status_display = f"⚪ {job_status}"
+        
         # Get ATS Position ID if available
         ats_position_id = None
         if 'ATS Position ID' in matching_job.columns:
             ats_position_id = matching_job['ATS Position ID'].iloc[0]
         
-        # Primary Strategy: Use ATS Position ID if available in both datasets
+        # Try all matching strategies
         parent_match = None
-        if ats_position_id and 'ATS Position ID' in self.position_report_df.columns:
-            parent_match = self.position_report_df[self.position_report_df['ATS Position ID'] == ats_position_id]
         
-        # Fallback strategies if ATS Position ID doesn't yield a match
+        # Strategy 1: Try match between Reference Id and Parent Id (PRIMARY STRATEGY)
+        if reference_id and 'Parent Id' in self.position_report_df.columns:
+            parent_match = self.position_report_df[self.position_report_df['Parent Id'] == reference_id]
+        
+        # Fallback strategies if Reference ID doesn't yield a match
         if parent_match is None or parent_match.empty:
-            # Strategy 1: Try direct match between Job Id and Parent Id
-            parent_match = self.position_report_df[self.position_report_df['Parent Id'] == job_id]
+            # Strategy 2: Use ATS Position ID if available in both datasets
+            if ats_position_id and 'ATS Position ID' in self.position_report_df.columns:
+                parent_match = self.position_report_df[self.position_report_df['ATS Position ID'] == ats_position_id]
             
-            # Strategy 2: Try match between Reference Id and Parent Id
-            if parent_match.empty and reference_id:
-                parent_match = self.position_report_df[self.position_report_df['Parent Id'] == reference_id]
-            
-            # Strategy 3: Try partial match where Parent Id contains Job Id
-            if parent_match.empty:
-                parent_match = self.position_report_df[self.position_report_df['Parent Id'].str.contains(job_id, na=False)]
+            # Strategy 3: Try direct match between Job Id and Parent Id
+            if parent_match is None or parent_match.empty:
+                parent_match = self.position_report_df[self.position_report_df['Parent Id'] == job_id]
             
             # Strategy 4: Try partial match where Parent Id contains Reference Id
-            if parent_match.empty and reference_id:
+            if (parent_match is None or parent_match.empty) and reference_id:
                 parent_match = self.position_report_df[self.position_report_df['Parent Id'].str.contains(reference_id, na=False)]
+            
+            # Strategy 5: Try partial match where Parent Id contains Job Id
+            if parent_match is None or parent_match.empty:
+                parent_match = self.position_report_df[self.position_report_df['Parent Id'].str.contains(job_id, na=False)]
         
-        if parent_match.empty:
+        if parent_match is None or parent_match.empty:
             return None, None
         
         # Get the job description
@@ -261,6 +320,7 @@ class JobSearchUtility:
             Job Description for {extracted_ids.get('job_name', 'Position')}
             
             Company: {extracted_ids.get('client', 'Our Client')}
+            Status: {status_display}
             
             Responsibilities:
             - Develop high-quality software design and architecture
@@ -287,6 +347,7 @@ class JobSearchUtility:
             'Reference Id': reference_id,
             'Job Name': extracted_ids.get('job_name', ''),
             'Client': extracted_ids.get('client', ''),
+            'Status': status_display,
             'Parent Id': parent_match['Parent Id'].iloc[0] if 'Parent Id' in parent_match.columns else 'N/A',
             'ATS Position ID': ats_position_id or 'N/A',
             'Job Description': job_description
@@ -304,6 +365,10 @@ def find_data_files():
     job_listing_candidates = []
     
     for directory in directories:
+        # Check if directory exists before trying to list its contents
+        if not os.path.exists(directory):
+            continue
+            
         for f in os.listdir(directory):
             if f.endswith(('.csv', '.xlsx', '.xls')):
                 file_path = os.path.join(directory, f)
@@ -423,7 +488,7 @@ def render_job_search_section(state_manager):
     elif not job_search.is_initialized and job_search_initialized:
         # Try to re-initialize with dummy data for demo purposes
         job_search.position_report_df = pd.DataFrame({
-            'Parent Id': ['1001', '1002', '1003', '1004', '1005'],
+            'Parent Id': ['REF1001', 'REF1002', 'REF1003', 'REF1004', 'REF1005'],
             'Job Description': [
                 'Software Engineer with 5+ years experience in Python and Java...',
                 'Data Scientist with strong background in machine learning...',
@@ -449,6 +514,13 @@ def render_job_search_section(state_manager):
                 'CloudSystems Inc.', 
                 'WebApp Solutions',
                 'ServerTech Inc.'
+            ],
+            'Job Status': [
+                'Active',
+                'Active',
+                'Closed',
+                'On Hold',
+                'Active'
             ]
         })
         

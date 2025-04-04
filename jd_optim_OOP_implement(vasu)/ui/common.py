@@ -143,8 +143,6 @@ def display_subsection_header(title):
     """Display a subsection header"""
     st.markdown(f"""<div class="subsection-header">{title}</div>""", unsafe_allow_html=True)
 
-
-
 def render_feedback_component(state_manager, services, context=""):
     """
     Unified feedback collection component
@@ -318,7 +316,7 @@ def display_jd_comparison(original_jd, enhanced_jd, services, context=""):
                 key=f"{context}_comparison"
             )
             st.caption("Percentages indicate keyword coverage in each category")
-            
+
 def render_jd_selector(state_manager, services, context=""):
     """
     Unified job description selector component
@@ -368,6 +366,7 @@ def render_jd_selector(state_manager, services, context=""):
     # Handle each source option
     if selected_source == "🔍 Search Database":
         # First ensure job search is initialized
+        from utils.job_search import render_job_search_section
         job_search_initialized = render_job_search_section(state_manager)
         
         if not job_search_initialized:
@@ -419,6 +418,9 @@ def render_jd_selector(state_manager, services, context=""):
     elif selected_source == "📁 File Selection":
         jd_directory = os.path.join(os.getcwd(), "Data/JDs")
         try:
+            # Create the directory if it doesn't exist
+            os.makedirs(jd_directory, exist_ok=True)
+            
             files = [f for f in os.listdir(jd_directory) if f.endswith(('.txt', '.docx'))]
             
             if files:
@@ -441,21 +443,10 @@ def render_jd_selector(state_manager, services, context=""):
                         st.error(f"Error reading file: {str(e)}")
                         return False
             else:
-                st.warning("No job description files found in JDs directory. Creating sample files...")
-                
-                # Create the directory if it doesn't exist
-                os.makedirs(jd_directory, exist_ok=True)
-                
-                # Write sample files
-                for filename, content in sample_jds.items():
-                    file_path = os.path.join(jd_directory, filename)
-                    with open(file_path, "w") as f:
-                        f.write(content)
-
-        except FileNotFoundError:
-            st.info("Directory 'JDs' not found. Creating it...")
-            os.makedirs(jd_directory, exist_ok=True)
-            st.rerun()
+                st.info("No job description files found in JDs directory. Please upload a file or use another source.")
+                return False
+        except Exception as e:
+            st.error(f"Error accessing JDs directory: {str(e)}")
             return False
     
     elif selected_source == "📤 Upload New":
@@ -471,11 +462,39 @@ def render_jd_selector(state_manager, services, context=""):
                 if uploaded_file.name.endswith('.txt'):
                     file_content = uploaded_file.getvalue().decode('utf-8')
                 else:  # .docx
-                    file_content = process_uploaded_docx(uploaded_file)
+                    try:
+                        from docx import Document
+                        # Save temporarily
+                        temp_path = f"temp_{uploaded_file.name}"
+                        with open(temp_path, 'wb') as f:
+                            f.write(uploaded_file.getvalue())
+                        
+                        # Read with python-docx
+                        doc = Document(temp_path)
+                        file_content = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+                        
+                        # Clean up
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
+                    except ImportError:
+                        st.error("python-docx package not found. Please install it to process DOCX files.")
+                        file_content = f"[Could not process DOCX file: {uploaded_file.name}]"
                 
                 jd_content = file_content
                 jd_source_name = uploaded_file.name
                 jd_unique_id = f"upload_{uploaded_file.name}"
+                
+                # Create JDs directory if it doesn't exist
+                jd_dir = os.path.join(os.getcwd(), "Data", "JDs")
+                os.makedirs(jd_dir, exist_ok=True)
+                
+                # Save to JDs directory for future use
+                save_path = os.path.join(jd_dir, uploaded_file.name)
+                
+                with open(save_path, 'wb') as f:
+                    f.write(uploaded_file.getvalue())
+                
+                st.success(f"Saved {uploaded_file.name} to JDs directory for future use.")
             except Exception as e:
                 st.error(f"Error processing uploaded file: {str(e)}")
                 return False
@@ -522,13 +541,3 @@ def render_jd_selector(state_manager, services, context=""):
         return True
     
     return False
-
-# Add mock functions for process_uploaded_docx and display_success_message
-# In case they're missing in the actual code
-def process_uploaded_docx(uploaded_file):
-    """Process an uploaded docx file (mock function)"""
-    return "This is a placeholder for the document content"
-
-def display_success_message(message):
-    """Display a success message"""
-    st.success(message)

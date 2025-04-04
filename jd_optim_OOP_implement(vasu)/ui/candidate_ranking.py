@@ -4,105 +4,7 @@ import pandas as pd
 import numpy as np
 from ui.common import display_section_header, display_subsection_header, display_info_message, display_warning_message, display_success_message
 from utils.visualization import create_distribution_chart, create_radar_chart
-
-class ResumeAnalyzer:
-    """Simplified ResumeAnalyzer class for demo purposes"""
-    
-    def __init__(self):
-        """Initialize the resume analyzer"""
-        pass
-    
-    def categorize_resumes(self, job_desc, resume_df):
-        """
-        Categorize resumes based on match with job description
-        This is a simplified implementation for demo purposes
-        
-        Args:
-            job_desc: Job description (dict or Series)
-            resume_df: DataFrame of resumes
-            
-        Returns:
-            dict: Categorized resumes
-        """
-        # Extract skills from job desc
-        jd_skills = str(job_desc.get('Skills', '')).lower().split(', ')
-        jd_tools = str(job_desc.get('Tools', '')).lower().split(', ')
-        
-        # Initialize lists
-        all_resumes = []
-        
-        # Process each resume
-        for _, resume in resume_df.iterrows():
-            # Extract skills from resume
-            resume_skills = str(resume.get('Skills', '')).lower().split(', ')
-            resume_tools = str(resume.get('Tools', '')).lower().split(', ')
-            
-            # Calculate match scores
-            skill_matches = sum(1 for skill in resume_skills if any(jd_skill in skill for jd_skill in jd_skills))
-            tool_matches = sum(1 for tool in resume_tools if any(jd_tool in tool for jd_tool in jd_tools))
-            
-            # Calculate overall score (weighted)
-            max_skills = max(len(jd_skills), 1)
-            max_tools = max(len(jd_tools), 1)
-            
-            skill_score = skill_matches / max_skills
-            tool_score = tool_matches / max_tools
-            
-            # Calculate weighted score
-            score = 0.7 * skill_score + 0.3 * tool_score
-            
-            # Add to list
-            all_resumes.append({
-                'Resume ID': resume.get('File Name', f"Resume_{_}"),
-                'Skills': resume.get('Skills', ''),
-                'Tools': resume.get('Tools', ''),
-                'Certifications': resume.get('Certifications', ''),
-                'Score': score
-            })
-        
-        # Sort by score
-        all_resumes.sort(key=lambda x: x['Score'], reverse=True)
-        
-        # Get top 3
-        top_3 = all_resumes[:3] if len(all_resumes) >= 3 else all_resumes
-        
-        # Categorize based on score thresholds
-        high_matches = [r for r in all_resumes if r['Score'] >= 0.6]
-        medium_matches = [r for r in all_resumes if 0.3 <= r['Score'] < 0.6]
-        low_matches = [r for r in all_resumes if r['Score'] < 0.3]
-        
-        return {
-            'top_3': top_3,
-            'high_matches': high_matches,
-            'medium_matches': medium_matches,
-            'low_matches': low_matches
-        }
-    
-    def process_resume_pool(self, uploaded_files):
-        """
-        Process uploaded resume files
-        This is a simplified implementation for demo purposes
-        
-        Args:
-            uploaded_files: List of uploaded resume files
-            
-        Returns:
-            DataFrame: Processed resume data
-        """
-        # Create a DataFrame with sample data
-        data = []
-        
-        for i, file in enumerate(uploaded_files):
-            # In a real implementation, we would extract text from the uploaded files
-            # For demo purposes, we'll create sample data
-            data.append({
-                'File Name': file.name,
-                'Skills': f"Python, Java, {'Data Science' if i % 2 == 0 else 'Cloud Computing'}, SQL",
-                'Tools': f"{'TensorFlow' if i % 2 == 0 else 'Docker'}, Git, {'AWS' if i % 3 == 0 else 'Azure'}",
-                'Certifications': f"{'AWS Certified' if i % 2 == 0 else 'Azure Certified'}"
-            })
-        
-        return pd.DataFrame(data)
+from models.resume_analyzer import ResumeAnalyzer
 
 def render_candidate_ranking_page(services):
     """
@@ -255,45 +157,6 @@ def render_candidate_ranking_page(services):
         display_section_header("📑 All Resumes by Category")
         display_categorized_resumes(analysis_results)
 
-
-def extract_skills_from_text(text):
-    """Extract skills from text for demo purposes"""
-    # In a real implementation, this would use NLP to extract skills
-    # For demo purposes, we'll use a simple keyword approach
-    common_skills = ['python', 'java', 'javascript', 'c++', 'c#', 'sql', 'nosql', 
-                     'aws', 'azure', 'gcp', 'cloud', 'machine learning', 'ai',
-                     'data science', 'data analysis', 'ml', 'deep learning',
-                     'frontend', 'backend', 'full stack', 'devops', 'agile']
-    
-    found_skills = []
-    text_lower = text.lower()
-    
-    for skill in common_skills:
-        if skill in text_lower:
-            found_skills.append(skill)
-    
-    return ', '.join(found_skills)
-
-
-def extract_tools_from_text(text):
-    """Extract tools from text for demo purposes"""
-    # In a real implementation, this would use NLP to extract tools
-    # For demo purposes, we'll use a simple keyword approach
-    common_tools = ['git', 'jenkins', 'docker', 'kubernetes', 'terraform',
-                   'jira', 'confluence', 'slack', 'react', 'angular', 'vue',
-                   'django', 'flask', 'spring', 'tensorflow', 'pytorch',
-                   'scikit-learn', 'pandas', 'numpy', 'jupyter']
-    
-    found_tools = []
-    text_lower = text.lower()
-    
-    for tool in common_tools:
-        if tool in text_lower:
-            found_tools.append(tool)
-    
-    return ', '.join(found_tools)
-
-
 def detect_jd_type(file_name):
     """Detect the job description type based on the file name"""
     file_name = str(file_name).lower()
@@ -338,7 +201,7 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_mana
             "unknown": "resumes_analysis_output.csv"
         }
         
-        default_file = default_file_map.get(jd_type, "resumes_analysis_output.csv")
+        default_file = default_file_map.get(jd_type, "Data/Extracted Resumes/resumes_analysis_output.csv")
         
         if os.path.exists(default_file):
             try:
@@ -360,7 +223,7 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_mana
                     pass
             
             st.warning("Default resume pool file not found.")
-            return create_sample_resume_df()
+
     
     elif selection == "Upload New Resume Pool":
         # Create UI for uploading new resumes
@@ -430,63 +293,8 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_mana
     return create_sample_resume_df()
 
 
-def create_sample_resume_df():
-    """Create a sample resume DataFrame"""
-    st.info("Using sample resume data")
-    sample_resume_data = {
-        'File Name': ['Resume_1', 'Resume_2', 'Resume_3', 'Resume_4', 'Resume_5'],
-        'Skills': [
-            'Python, Java, Data Analysis, Machine Learning', 
-            'Java, Python, SQL, REST API',
-            'C#, .NET, Azure, Cloud Computing',
-            'Java, Spring, Hibernate, SQL, REST',
-            'Python, ML, AI, Deep Learning, SQL'
-        ],
-        'Tools': [
-            'TensorFlow, Scikit-learn, Docker, Git', 
-            'IntelliJ, Eclipse, Git, Maven',
-            'Visual Studio, Git, Azure DevOps',
-            'Jenkins, Maven, Docker, Kubernetes',
-            'Pandas, NumPy, Jupyter, Keras'
-        ],
-        'Certifications': [
-            'AWS Machine Learning Specialty', 
-            'Oracle Java Professional',
-            'Microsoft Azure Developer',
-            'AWS Developer Associate',
-            'Google Professional Data Engineer'
-        ]
-    }
-    return pd.DataFrame(sample_resume_data)
 
 
-def create_fallback_analysis(resume_df):
-    """Create fallback analysis results with random scores"""
-    all_resumes = []
-    for i in range(len(resume_df)):
-        score = np.random.uniform(0.1, 0.9)
-        all_resumes.append({
-            'Resume ID': resume_df.iloc[i]['File Name'],
-            'Skills': resume_df.iloc[i]['Skills'],
-            'Tools': resume_df.iloc[i]['Tools'],
-            'Certifications': resume_df.iloc[i]['Certifications'],
-            'Score': score
-        })
-    
-    # Sort by score
-    all_resumes.sort(key=lambda x: x['Score'], reverse=True)
-    
-    # Categorize based on score thresholds
-    high_matches = [r for r in all_resumes if r['Score'] >= 0.6]
-    medium_matches = [r for r in all_resumes if 0.3 <= r['Score'] < 0.6]
-    low_matches = [r for r in all_resumes if r['Score'] < 0.3]
-    
-    return {
-        'top_3': all_resumes[:3],
-        'high_matches': high_matches,
-        'medium_matches': medium_matches,
-        'low_matches': low_matches
-    }
 
 
 def display_top_matches(analysis_results):

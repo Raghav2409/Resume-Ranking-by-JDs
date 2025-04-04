@@ -1,0 +1,29 @@
+{
+  "session_id": "d4fbbe7c-ad14-42b5-8ff2-6979b6204f62",
+  "username": "Recruiter",
+  "session_start_time": "2025-04-04T03:20:32.123985",
+  "selected_file": "\ud83d\udfe2 RRID798_Manual Testers 5-8 y_Roche Molecular Systems - India",
+  "original_content": "DBA (not necessarily a DBA, but someone with below skills):\n-\tExpertise in Oracle schema, temporary tables, views, stored procedures, functions, constrains and sequences\n-\tExpertise in PostgreSQL schema, temporary tables, views, stored procedures, functions, constrains and sequences\n-\tExperience in migrating Oracle database to PostgreSQL\n-\tUnderstand authentication mechanism between Oracle and PostgreSQL and its impact on application\n-\tUnderstand and assess Oracle to PostgreSQL migration impact on application\n-\tExperience in configuring highly available PostgreSQL database on AWS Cloud and setting up monitoring and performance tuning for PostgreSQL\n",
+  "enhanced_versions": [],
+  "feedback_history": [],
+  "final_enhanced_version": "",
+  "actions": [
+    {
+      "action": "file_selection",
+      "file_name": "DataAnalyticsAIMLJD (1).txt",
+      "timestamp": "2025-04-04T03:20:32.157740"
+    },
+    {
+      "action": "file_selection",
+      "file_name": "\ud83d\udfe2 RRID433_Senior Data Analyst_Expedia",
+      "timestamp": "2025-04-04T03:20:51.871735"
+    },
+    {
+      "action": "file_selection",
+      "file_name": "\ud83d\udfe2 RRID798_Manual Testers 5-8 y_Roche Molecular Systems - India",
+      "timestamp": "2025-04-04T03:21:13.330721"
+    }
+  ],
+  "downloads": [],
+  "cache": {}
+}

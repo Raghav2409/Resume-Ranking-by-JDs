@@ -5,7 +5,7 @@ import streamlit as st
 
 class JobDescriptionAgent:
     """Agent for enhancing job descriptions using AWS Bedrock Claude"""
-    def __init__(self, model_id, max_tokens=5000, temperature=0.7):
+    def __init__(self, model_id, max_tokens=10000, temperature=0.7):
         self.model_id = model_id
         self.max_tokens = max_tokens
         self.temperature = temperature
