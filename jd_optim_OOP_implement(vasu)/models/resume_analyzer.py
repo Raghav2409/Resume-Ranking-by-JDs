@@ -5,6 +5,7 @@ import tempfile
 import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from io import BytesIO, StringIO
 from docx import Document
 from utils.text_processing import extract_skills, preprocess_text
 
@@ -62,7 +63,7 @@ class ResumeAnalyzer:
             resume_text = preprocess_text(
                 str(resume['Skills']) + ' ' + 
                 str(resume['Tools']) + ' ' + 
-                str(resume['Certifications'])
+                str(resume.get('Certifications', ''))
             )
             
             try:
@@ -199,8 +200,8 @@ class ResumeAnalyzer:
                             break
             
             if not resume_files:
-                st.warning("No resume CSV files found. Using sample data.")
-                return self.create_sample_resume_df()
+                st.warning("No resume CSV files found.")
+                return None
             
             # If resume files are full paths, get basenames for display
             resume_files_display = [os.path.basename(f) if os.path.isabs(f) else f for f in resume_files]
@@ -217,7 +218,7 @@ class ResumeAnalyzer:
             
             if not selected_file:
                 st.error("Selected file path could not be determined.")
-                return self.create_sample_resume_df()
+                return None
             
             # Read the selected CSV file
             try:
@@ -231,44 +232,15 @@ class ResumeAnalyzer:
                 return resume_df
             except Exception as e:
                 st.error(f"Error reading file {selected_file}: {str(e)}")
-                return self.create_sample_resume_df()
+                return None
         
         except Exception as e:
             st.error(f"Error loading resume data: {str(e)}")
-            return self.create_sample_resume_df()
-    
-    def create_sample_resume_df(self):
-        """Create a sample resume DataFrame"""
-        st.info("Using sample resume data")
-        sample_resume_data = {
-            'File Name': ['Resume_1', 'Resume_2', 'Resume_3', 'Resume_4', 'Resume_5'],
-            'Skills': [
-                'Python, Java, Data Analysis, Machine Learning', 
-                'Java, Python, SQL, REST API',
-                'C#, .NET, Azure, Cloud Computing',
-                'Java, Spring, Hibernate, SQL, REST',
-                'Python, ML, AI, Deep Learning, SQL'
-            ],
-            'Tools': [
-                'TensorFlow, Scikit-learn, Docker, Git', 
-                'IntelliJ, Eclipse, Git, Maven',
-                'Visual Studio, Git, Azure DevOps',
-                'Jenkins, Maven, Docker, Kubernetes',
-                'Pandas, NumPy, Jupyter, Keras'
-            ],
-            'Certifications': [
-                'AWS Machine Learning Specialty', 
-                'Oracle Java Professional',
-                'Microsoft Azure Developer',
-                'AWS Developer Associate',
-                'Google Professional Data Engineer'
-            ]
-        }
-        return pd.DataFrame(sample_resume_data)
+            return None
     
     def analyze_uploaded_resume(self, uploaded_file):
         """
-        Analyze a user-uploaded resume (.docx) and return the extracted information.
+        Analyze a user-uploaded resume (.docx or .csv) and return the extracted information.
         
         Args:
             uploaded_file (UploadedFile): The uploaded resume file
@@ -276,54 +248,144 @@ class ResumeAnalyzer:
         Returns:
             dict: Dictionary with extracted resume details
         """
-        # Only process .docx files
-        if not uploaded_file.name.endswith(".docx"):
-            raise ValueError(f"Unsupported file format for {uploaded_file.name}. Only .docx files are supported.")
-        
-        # Create a temporary file with a unique name
-        temp_filename = f"temp_{uploaded_file.name.replace(' ', '_')}_{np.random.randint(10000)}.docx"
-        temp_path = os.path.join(tempfile.gettempdir(), temp_filename)
-        
         try:
-            # Write the uploaded file to a temporary file
-            with open(temp_path, 'wb') as f:
-                f.write(uploaded_file.getvalue())
-            
-            # Extract text from the document
-            doc = Document(temp_path)
-            resume_text = "\n".join([para.text for para in doc.paragraphs])
-            
-            # Basic extraction - in a real implementation, you would use NLP or an LLM
-            # to extract these details more accurately
-            skills = extract_skills(resume_text)
-            skills_str = ", ".join([item for sublist in skills.values() for item in sublist])
-            
-            # Just as a simple example - detecting tools is more complex in reality
-            tools_keywords = ['git', 'docker', 'kubernetes', 'jenkins', 'jira', 
-                             'confluence', 'aws', 'azure', 'vs code', 'intellij']
-            detected_tools = []
-            for tool in tools_keywords:
-                if tool.lower() in resume_text.lower():
-                    detected_tools.append(tool)
-            
-            # Similarly, certifications would need better extraction
-            cert_keywords = ['certified', 'certification', 'certificate', 'aws', 'azure', 
-                           'google', 'professional', 'associate', 'expert']
-            has_cert = any(kw in resume_text.lower() for kw in cert_keywords)
-            
-            return {
-                'File Name': uploaded_file.name,
-                'Skills': skills_str or "General programming, problem-solving",
-                'Tools': ", ".join(detected_tools) or "Standard development tools",
-                'Certifications': "Certifications detected" if has_cert else "None specified"
-            }
+            # Process based on file extension
+            if uploaded_file.name.endswith('.docx'):
+                return self._analyze_docx_resume(uploaded_file)
+            elif uploaded_file.name.endswith('.csv'):
+                return self._analyze_csv_resume(uploaded_file)
+            else:
+                st.error(f"Unsupported file format: {uploaded_file.name}. Please upload DOCX or CSV files.")
+                return None
         except Exception as e:
-            print(f"Error in analyze_uploaded_resume for {uploaded_file.name}: {e}")
+            st.error(f"Error analyzing resume {uploaded_file.name}: {str(e)}")
             return None
-        finally:
-            # Always remove the temporary file
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+    
+    def _analyze_docx_resume(self, uploaded_file):
+        """
+        Analyze a DOCX resume file
+        
+        Args:
+            uploaded_file (UploadedFile): The uploaded DOCX file
+            
+        Returns:
+            dict: Dictionary with extracted resume details
+        """
+        try:
+            # Show progress indicator
+            with st.spinner(f"Processing DOCX: {uploaded_file.name}"):
+                # Get file content
+                docx_bytes = uploaded_file.getvalue()
+                st.info(f"DOCX file size: {len(docx_bytes)} bytes")
+                
+                # Load the document
+                doc = Document(BytesIO(docx_bytes))
+                
+                # Extract text from paragraphs
+                paragraphs = []
+                for para in doc.paragraphs:
+                    if para.text.strip():  # Only include non-empty paragraphs
+                        paragraphs.append(para.text)
+                
+                resume_text = "\n".join(paragraphs)
+                st.success(f"Successfully extracted {len(paragraphs)} paragraphs")
+                
+                # Extract information
+                skills_map = extract_skills(resume_text)
+                skills_str = ", ".join([item for sublist in skills_map.values() for item in sublist])
+                
+                # Detect tools
+                tools_keywords = [
+                    'git', 'docker', 'kubernetes', 'jenkins', 'jira', 
+                    'confluence', 'aws', 'azure', 'vs code', 'intellij',
+                    'eclipse', 'idea', 'visual studio', 'vscode', 'maven',
+                    'gradle', 'npm', 'yarn', 'webpack', 'jupyter'
+                ]
+                
+                detected_tools = []
+                for tool in tools_keywords:
+                    if tool.lower() in resume_text.lower():
+                        detected_tools.append(tool)
+                
+                # Detect certifications
+                cert_keywords = [
+                    'certified', 'certification', 'certificate', 'aws', 'azure', 
+                    'google', 'professional', 'associate', 'expert', 'oracle',
+                    'microsoft', 'java', 'python', 'scrum', 'pmp'
+                ]
+                
+                certification_text = ""
+                for line in paragraphs:
+                    if any(kw.lower() in line.lower() for kw in cert_keywords):
+                        certification_text += line + "\n"
+                
+                if not certification_text:
+                    certification_text = "None specified"
+                
+                return {
+                    'File Name': uploaded_file.name,
+                    'Skills': skills_str or "General technical skills",
+                    'Tools': ", ".join(detected_tools) or "Standard development tools",
+                    'Certifications': certification_text
+                }
+        except Exception as e:
+            st.error(f"Error processing DOCX file: {str(e)}")
+            return None
+    
+    def _analyze_csv_resume(self, uploaded_file):
+        """
+        Process a CSV resume file
+        
+        Args:
+            uploaded_file (UploadedFile): The uploaded CSV file
+            
+        Returns:
+            dict: Dictionary with extracted resume details or None if CSV has multiple rows
+        """
+        try:
+            # Show progress indicator
+            with st.spinner(f"Processing CSV: {uploaded_file.name}"):
+                # Read CSV content
+                csv_content = uploaded_file.getvalue().decode('utf-8')
+                
+                # Parse CSV
+                import csv
+                
+                # First check if this is a multi-row CSV (resume dataset) or single resume
+                csv_rows = list(csv.reader(StringIO(csv_content)))
+                
+                if len(csv_rows) <= 2:  # Header + single data row
+                    # This is likely a single resume in CSV format
+                    if len(csv_rows) == 2:
+                        # Has header and one data row
+                        header = csv_rows[0]
+                        data = csv_rows[1]
+                        
+                        # Create a dictionary of header->value
+                        resume_data = {header[i]: data[i] for i in range(min(len(header), len(data)))}
+                        
+                        # Extract required fields or use defaults
+                        return {
+                            'File Name': uploaded_file.name,
+                            'Skills': resume_data.get('Skills', resume_data.get('skills', '')),
+                            'Tools': resume_data.get('Tools', resume_data.get('tools', '')),
+                            'Certifications': resume_data.get('Certifications', resume_data.get('certifications', ''))
+                        }
+                    else:
+                        # No data rows, just header
+                        st.warning(f"CSV file {uploaded_file.name} contains only a header row with no data")
+                        return None
+                else:
+                    # This is a multi-row CSV, likely a resume dataset
+                    # Parse with pandas
+                    df = pd.read_csv(StringIO(csv_content))
+                    st.success(f"CSV file contains {len(df)} resumes. Processing as a resume dataset.")
+                    
+                    # Return None to indicate this should be treated as a full dataset not a single resume
+                    return None
+        except Exception as e:
+            st.error(f"Error processing CSV file: {str(e)}")
+            return None
     
     def process_resume_pool(self, uploaded_files):
         """
@@ -336,17 +398,87 @@ class ResumeAnalyzer:
             DataFrame: DataFrame containing processed resume data
         """
         processed_resumes = []
+        csv_dataframes = []
+        
+        # First pass: Process each file
         for uploaded_file in uploaded_files:
             try:
                 if uploaded_file.name.endswith(".docx"):
+                    # Process DOCX as individual resume
                     resume_data = self.analyze_uploaded_resume(uploaded_file)
                     if resume_data is not None:
                         processed_resumes.append(resume_data)
+                        st.success(f"Successfully processed DOCX: {uploaded_file.name}")
+                    else:
+                        st.warning(f"Could not extract data from {uploaded_file.name}")
+                
+                elif uploaded_file.name.endswith(".csv"):
+                    # Check if CSV is a single resume or a dataset
+                    resume_data = self._analyze_csv_resume(uploaded_file)
+                    
+                    if resume_data is not None:
+                        # This is a single resume in CSV format
+                        processed_resumes.append(resume_data)
+                        st.success(f"Successfully processed single-resume CSV: {uploaded_file.name}")
+                    else:
+                        # This might be a multi-resume CSV dataset
+                        try:
+                            df = pd.read_csv(BytesIO(uploaded_file.getvalue()))
+                            
+                            # Check if it has the required columns
+                            required_cols = ['File Name', 'Skills', 'Tools']
+                            missing_cols = [col for col in required_cols if col not in df.columns]
+                            
+                            if missing_cols:
+                                # Try lowercase column names
+                                lowercase_cols = {col.lower(): col for col in df.columns}
+                                renamed_cols = {}
+                                
+                                for required in required_cols:
+                                    if required.lower() in lowercase_cols:
+                                        renamed_cols[lowercase_cols[required.lower()]] = required
+                                
+                                if renamed_cols:
+                                    df = df.rename(columns=renamed_cols)
+                                    
+                                    # Check again for missing columns
+                                    missing_cols = [col for col in required_cols if col not in df.columns]
+                            
+                            if not missing_cols:
+                                # This is a valid resume dataset
+                                csv_dataframes.append(df)
+                                st.success(f"Successfully loaded resume dataset: {uploaded_file.name} with {len(df)} entries")
+                            else:
+                                st.warning(f"CSV file {uploaded_file.name} is missing required columns: {', '.join(missing_cols)}")
+                        except Exception as e:
+                            st.error(f"Error processing multi-resume CSV {uploaded_file.name}: {str(e)}")
+                
                 else:
-                    print(f"Skipping {uploaded_file.name} - not a .docx file")
+                    st.warning(f"Skipping {uploaded_file.name} - not a supported format (.docx or .csv)")
+            
             except Exception as e:
-                print(f"Error processing {uploaded_file.name}: {e}")
+                st.error(f"Error processing {uploaded_file.name}: {str(e)}")
         
-        if processed_resumes:
+        # Second pass: Combine results
+        if csv_dataframes:
+            # If we have CSV datasets, use those first
+            combined_df = pd.concat(csv_dataframes, ignore_index=True)
+            
+            # Add any individually processed resumes
+            if processed_resumes:
+                individual_df = pd.DataFrame(processed_resumes)
+                combined_df = pd.concat([combined_df, individual_df], ignore_index=True)
+            
+            # Ensure all required columns exist
+            for col in ['File Name', 'Skills', 'Tools', 'Certifications']:
+                if col not in combined_df.columns:
+                    combined_df[col] = ""
+            
+            return combined_df
+            
+        elif processed_resumes:
+            # If we only have individually processed resumes
             return pd.DataFrame(processed_resumes)
+        
+        # No valid data
         return None
