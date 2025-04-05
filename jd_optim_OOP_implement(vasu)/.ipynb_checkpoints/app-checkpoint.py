@@ -6,111 +6,112 @@ import uuid
 # Import components
 from config import set_page_config, custom_css
 from utils.file_utils import save_enhanced_jd
+from utils.job_search import JobSearchUtility
 from models.job_description_analyzer import JobDescriptionAnalyzer
 from models.job_description_agent import JobDescriptionAgent
 from jdoptim_logger import JDOptimLogger
+from state_manager import StateManager
 
 # Import UI components
-from ui.common import render_header, render_role_selector, render_tabs, switch_tab, switch_page
-from ui.jd_enhance import render_jd_enhance_page
-from ui.jd_refine import render_jd_refine_page
+from ui.common import render_header, render_role_selector, render_tabs
+from ui.jd_optimization import render_jd_optimization_page
 from ui.candidate_ranking import render_candidate_ranking_page
 from ui.interview_prep import render_interview_prep_page
 from ui.client_feedback import render_client_feedback_page
 
 def init_session_state():
-    """Initialize session state variables if they don't exist"""
-    if 'role' not in st.session_state:
-        st.session_state.role = 'Recruiter'  # Default role
-    
-    if 'session_id' not in st.session_state:
-        st.session_state.session_id = str(uuid.uuid4())
+    """Initialize global session state manager"""
+    if 'state_manager' not in st.session_state:
+        # Create state manager with built-in defaults
+        st.session_state.state_manager = StateManager()
+        state_manager = st.session_state.state_manager
         
-    if 'feedback_history' not in st.session_state:
-        st.session_state.feedback_history = []
+        # Initialize essential global state
+        state_manager.set('session_id', str(uuid.uuid4()))
+        state_manager.set('role', 'Recruiter')
+        state_manager.set('active_tab', "JD Optimization")
         
-    if 'last_file' not in st.session_state:
-        st.session_state.last_file = None
+        # Initialize empty containers for job descriptions
+        state_manager.set('jd_repository', {
+            'original': None,           # Original JD content
+            'source_name': None,        # Name/source of JD
+            'unique_id': None,          # Unique ID for caching
+            'enhanced_versions': [],    # List of enhanced versions 
+            'selected_version_idx': 0,  # User-selected version
+            'final_version': None,      # Final enhanced version
+        })
         
-    if 'reload_flag' not in st.session_state:
-        st.session_state.reload_flag = False
+        # Initialize feedback repository
+        state_manager.set('feedback_repository', {
+            'history': [],              # All feedback items
+            'current_feedback': '',     # Current feedback text
+            'current_type': 'General Feedback'  # Current feedback type
+        })
         
-    if 'clear_feedback' not in st.session_state:
-        st.session_state.clear_feedback = False
+        # Initialize analytics repository
+        state_manager.set('analytics_repository', {
+            'original_scores': None,
+            'version_scores': {},
+            'final_scores': None
+        })
         
-    if 'viewing_all_feedback' not in st.session_state:
-        st.session_state.viewing_all_feedback = False
+        # Initialize resume repository
+        state_manager.set('resume_repository', {
+            'pools': [],
+            'ranked_candidates': [],
+            'analysis_results': None
+        })
         
-    if 'viewing_session_feedback' not in st.session_state:
-        st.session_state.viewing_session_feedback = False
+        # Register notification bus
+        state_manager.set('notifications', [])
         
-    if 'final_version_generated' not in st.session_state:
-        st.session_state.final_version_generated = False
-        
-    if 'final_version' not in st.session_state:
-        st.session_state.final_version = None
-        
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = "jd_enhance"  # Default page
-        
-    if 'feedback_type' not in st.session_state:
-        st.session_state.feedback_type = "General Feedback"
-        
-    if 'active_tab' not in st.session_state:
-        st.session_state.active_tab = "JD Versions"
-        
-    if 'analysis_results' not in st.session_state:
-        st.session_state.analysis_results = None
-        
-    if 'ranked_candidates' not in st.session_state:
-        st.session_state.ranked_candidates = []
-        
-    # Client feedback tab specific state
-    if 'client_jd' not in st.session_state:
-        st.session_state.client_jd = None
-        
-    if 'client_feedback' not in st.session_state:
-        st.session_state.client_feedback = None
-        
-    if 'client_feedback_type' not in st.session_state:
-        st.session_state.client_feedback_type = "Client Feedback"
-        
-    if 'client_enhanced_jd' not in st.session_state:
-        st.session_state.client_enhanced_jd = None
+        # Initialize job search utility
+        state_manager.set('job_search_utility', JobSearchUtility())
+        state_manager.set('job_search_initialized', False)
 
 def get_or_create_logger():
-    """Get existing logger from session state or create a new one"""
+    """Get existing logger from session state or create a new one with proper integration"""
+    state_manager = st.session_state.state_manager
+    
     # First check if we have a logger in session state
     if 'logger' in st.session_state:
-        return st.session_state.logger
+        logger = st.session_state.logger
+        
+        # Ensure logger has latest role
+        if logger.username != state_manager.get('role'):
+            logger.username = state_manager.get('role')
+            logger.current_state["username"] = state_manager.get('role')
+            logger._save_state()
+            
+        return logger
     
-    # If we have a session_id, try to load that session
-    if 'session_id' in st.session_state:
-        try:
-            # Try to load existing session by ID
-            logger = JDOptimLogger.load_session(st.session_state.session_id)
-            if logger:
-                # Update role if it changed
-                if logger.username != st.session_state.role:
-                    logger.username = st.session_state.role
-                    logger.current_state["username"] = st.session_state.role
-                    logger._save_state()
-                
-                st.session_state.logger = logger
-                return logger
-        except Exception as e:
-            # If loading fails, we'll create a new logger below
-            print(f"Failed to load existing session: {e}")
+    # Try to load existing session by ID
+    session_id = state_manager.get('session_id')
+    try:
+        logger = JDOptimLogger.load_session(session_id)
+        if logger:
+            # Update role if it changed
+            if logger.username != state_manager.get('role'):
+                logger.username = state_manager.get('role')
+                logger.current_state["username"] = state_manager.get('role')
+                logger._save_state()
+            
+            st.session_state.logger = logger
+            return logger
+    except Exception as e:
+        print(f"Failed to load existing session: {e}")
     
     # Create a new logger with the current role
-    logger = JDOptimLogger(username=st.session_state.role)
-    st.session_state.session_id = logger.session_id
+    logger = JDOptimLogger(username=state_manager.get('role'))
+    
+    # Update session ID in state manager
+    state_manager.set('session_id', logger.session_id)
     st.session_state.logger = logger
     
     return logger
 
 def main():
-    """Main function to run the JD Agent application"""
+    """Main function with improved integration between app components"""
     # Configure the Streamlit page
     set_page_config()
 
@@ -120,36 +121,43 @@ def main():
     # Initialize session state
     init_session_state()
     
-    # Get or create logger
+    # Get state manager and logger
+    state_manager = st.session_state.state_manager
     logger = get_or_create_logger()
 
     # Render header with logo and title
     render_header()
     
-    # Render role selector
-    render_role_selector()
+    # Render role selector (updates state manager)
+    render_role_selector(state_manager)
     
-    # Render navigation tabs
-    render_tabs()
+    # Render navigation tabs (updates state manager)
+    render_tabs(state_manager)
     
-    # Initialize the analyzer and agent
+    # Initialize the analyzer and agent as shared services
     analyzer = JobDescriptionAnalyzer()
     agent = JobDescriptionAgent(model_id="anthropic.claude-3-haiku-20240307-v1:0")
     
-    # Render the appropriate content based on active tab
-    if st.session_state.active_tab == "JD Versions":
-        # For JD Versions tab, render either the enhance or refine page based on current state
-        if st.session_state.current_page == "jd_enhance":
-            render_jd_enhance_page(logger, analyzer, agent)
-        else:  # "jd_refine"
-            render_jd_refine_page(logger, analyzer, agent)
-    elif st.session_state.active_tab == "Feedback Loop":
-        render_jd_refine_page(logger, analyzer, agent)  # Use the same function for feedback loop
-    elif st.session_state.active_tab == "Candidate Ranking":
-        render_candidate_ranking_page()
-    elif st.session_state.active_tab == "Client Feedback":
-        render_client_feedback_page(logger, analyzer, agent)
-    elif st.session_state.active_tab == "Interview Prep":
+    # Create service container for shared resources
+    services = {
+        'logger': logger,
+        'analyzer': analyzer,
+        'agent': agent,
+        'state_manager': state_manager
+    }
+    
+    # Check for notifications from other tabs
+    process_notifications(state_manager)
+    
+    # Render the appropriate page based on active tab
+    active_tab = state_manager.get('active_tab')
+    if active_tab == "JD Optimization":
+        render_jd_optimization_page(services)
+    elif active_tab == "Candidate Ranking":
+        render_candidate_ranking_page(services)
+    elif active_tab == "Client Feedback":
+        render_client_feedback_page(services)
+    elif active_tab == "Interview Prep":
         render_interview_prep_page()
     
     # Footer with company info
@@ -161,6 +169,30 @@ def main():
     
     with footer_col2:
         st.caption(f"v2.0 - {datetime.datetime.now().strftime('%Y')}")
+
+def process_notifications(state_manager):
+    """Process any pending notifications between tabs"""
+    notifications = state_manager.get('notifications', [])
+    
+    if notifications:
+        # Process each notification
+        for notification in notifications:
+            notify_type = notification.get('type')
+            
+            if notify_type == 'jd_selected':
+                # Job description was selected in another tab
+                st.success(f"Using job description: {notification.get('source_name')}")
+            
+            elif notify_type == 'feedback_added':
+                # Feedback was added in another tab
+                st.info(f"New feedback added in {notification.get('origin')} tab")
+            
+            elif notify_type == 'version_enhanced':
+                # Job description was enhanced in another tab
+                st.success(f"Job description enhanced in {notification.get('origin')} tab")
+        
+        # Clear notifications after processing
+        state_manager.set('notifications', [])
 
 if __name__ == "__main__":
     main()

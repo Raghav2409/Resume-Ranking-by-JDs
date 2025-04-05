@@ -1,0 +1,29 @@
+{
+  "session_id": "5d62a1c3-582d-45ad-bea9-5b6c8c3fc4f3",
+  "username": "Recruiter",
+  "session_start_time": "2025-04-03T13:18:07.771381",
+  "selected_file": "DataEngineer.txt",
+  "original_content": "\n                        Data Engineer\n                        \n                        Responsibilities:\n                        - Design, build and maintain data pipelines\n                        - Develop ETL processes for data integration\n                        - Create and optimize database schemas\n                        - Ensure data quality and integrity\n                        - Collaborate with data scientists and analysts\n                        \n                        Requirements:\n                        - Bachelor's degree in Computer Science or related field\n                        - Experience with SQL and NoSQL databases\n                        - Proficiency in Python, Scala, or Java\n                        - Knowledge of big data technologies (Hadoop, Spark)\n                        - Experience with cloud platforms (AWS, Azure, GCP)\n                        ",
+  "enhanced_versions": [],
+  "feedback_history": [],
+  "final_enhanced_version": "",
+  "actions": [
+    {
+      "action": "file_selection",
+      "file_name": "DataEngineer.txt",
+      "timestamp": "2025-04-03T13:18:07.808187"
+    },
+    {
+      "action": "file_selection",
+      "file_name": "SoftwareDeveloper.txt",
+      "timestamp": "2025-04-03T13:18:17.453913"
+    },
+    {
+      "action": "file_selection",
+      "file_name": "DataEngineer.txt",
+      "timestamp": "2025-04-03T13:18:18.456141"
+    }
+  ],
+  "downloads": [],
+  "cache": {}
+}

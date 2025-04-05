@@ -1,0 +1,34 @@
+{
+  "session_id": "05e03b3a-4a33-4c04-ba06-ad59085fcb71",
+  "username": "Recruiter",
+  "session_start_time": "2025-04-04T03:27:47.000389",
+  "selected_file": "\ud83d\udfe2 RRID798_Manual Testers 5-8 y_Roche Molecular Systems - India",
+  "original_content": "DBA (not necessarily a DBA, but someone with below skills):\n-\tExpertise in Oracle schema, temporary tables, views, stored procedures, functions, constrains and sequences\n-\tExpertise in PostgreSQL schema, temporary tables, views, stored procedures, functions, constrains and sequences\n-\tExperience in migrating Oracle database to PostgreSQL\n-\tUnderstand authentication mechanism between Oracle and PostgreSQL and its impact on application\n-\tUnderstand and assess Oracle to PostgreSQL migration impact on application\n-\tExperience in configuring highly available PostgreSQL database on AWS Cloud and setting up monitoring and performance tuning for PostgreSQL\n",
+  "enhanced_versions": [],
+  "feedback_history": [],
+  "final_enhanced_version": "",
+  "actions": [
+    {
+      "action": "file_selection",
+      "file_name": "DataAnalyticsAIMLJD (1).txt",
+      "timestamp": "2025-04-04T03:27:53.853002"
+    },
+    {
+      "action": "file_selection",
+      "file_name": "Job Description - Java Developer - Health Care.txt",
+      "timestamp": "2025-04-04T03:28:04.852431"
+    },
+    {
+      "action": "file_selection",
+      "file_name": "Job Description - Java Developer - Health Care.txt",
+      "timestamp": "2025-04-04T03:28:30.546316"
+    },
+    {
+      "action": "file_selection",
+      "file_name": "\ud83d\udfe2 RRID798_Manual Testers 5-8 y_Roche Molecular Systems - India",
+      "timestamp": "2025-04-04T03:29:18.177039"
+    }
+  ],
+  "downloads": [],
+  "cache": {}
+}

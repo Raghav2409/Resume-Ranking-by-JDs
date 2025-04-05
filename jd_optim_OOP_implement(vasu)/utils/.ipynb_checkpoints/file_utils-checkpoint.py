@@ -29,16 +29,16 @@ def save_enhanced_jd(content, filename, format_type):
     return False
 
 def get_jd_files():
-    """Get a list of job description files from the JDs directory"""
-    jd_directory = os.path.join(os.getcwd(), "JDs")
+    """Get a list of job description files from the Data/JDs directory"""
+    jd_directory = os.path.join(os.getcwd(), "Data", "JDs")
     if not os.path.exists(jd_directory):
         return []
     
     return [f for f in os.listdir(jd_directory) if f.endswith(('.txt', '.docx'))]
 
 def get_feedback_files():
-    """Get a list of feedback files from the Feedbacks directory"""
-    feedback_directory = os.path.join(os.getcwd(), "Feedbacks")
+    """Get a list of feedback files from the Data/Feedbacks directory"""
+    feedback_directory = os.path.join(os.getcwd(), "Data", "Feedbacks")
     if not os.path.exists(feedback_directory):
         return []
     
