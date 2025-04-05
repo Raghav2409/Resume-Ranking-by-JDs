@@ -1883,7 +1883,6 @@ def analyze_resumes_in_directory(directory_path):
 
 def analyze_uploaded_resume(uploaded_file):
     """Analyze a user-uploaded resume (.docx) and return the extracted information."""
-    # Only process .docx files
     if not uploaded_file.name.endswith(".docx"):
         raise ValueError(f"Unsupported file format for {uploaded_file.name}. Only .docx files are supported.")
     
@@ -1893,10 +1892,9 @@ def analyze_uploaded_resume(uploaded_file):
         tmp_path = tmp.name
     
     try:
-        # Call your existing analyze_resume function
         result = analyze_resume(tmp_path)
-        
-        # Ensure the result is not None and has required keys
+        # Override the File Name with the original uploaded file's name
+        result["File Name"] = uploaded_file.name
         if result and all(key in result for key in ['File Name', 'Skills', 'Tools', 'Certifications']):
             return result
         else:
@@ -1906,7 +1904,6 @@ def analyze_uploaded_resume(uploaded_file):
         print(f"Error in analyze_uploaded_resume for {uploaded_file.name}: {e}")
         return None
     finally:
-        # Always remove the temporary file
         os.remove(tmp_path)
 
 def prepare_resume_df_for_ranking(resume_df):

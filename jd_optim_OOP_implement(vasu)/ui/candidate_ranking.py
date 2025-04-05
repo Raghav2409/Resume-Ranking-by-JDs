@@ -86,40 +86,104 @@ def render_candidate_ranking_page(services):
             st.warning("No resume data available. Please select or upload a valid resume pool.")
             return
         
-        # --- Analyze Button ---
-        if st.button('🔍 Analyze Resumes', type="primary", key="analyze_resume_btn"):
-            with st.spinner('Analyzing resumes...'):
-                try:
-                    # Get job description as dict/Series for analysis
-                    job_desc = pd.Series({
-                        'File Name': jd_source_name,
-                        'JD_Type': jd_type,
-                        'Skills': extract_skills_from_text(jd_content),
-                        'Tools': extract_tools_from_text(jd_content)
+    # Place this in candidate_ranking.py, replacing the existing analyze button section
+    
+    if st.button('🔍 Analyze Resumes', type="primary", key="analyze_resume_btn"):
+        with st.spinner('Analyzing resumes...'):
+            try:
+                # Get job description as dict/Series for analysis
+                skills = extract_skills_from_text(jd_content)
+                tools = extract_tools_from_text(jd_content)
+                
+                st.info(f"Analyzing job description: {jd_source_name}")
+                st.info(f"Found skills: {skills}")
+                st.info(f"Found tools: {tools}")
+                
+                job_desc = pd.Series({
+                    'File Name': jd_source_name,
+                    'JD_Type': jd_type,
+                    'Skills': skills,
+                    'Tools': tools
+                })
+                
+                # Check resume data
+                if resume_df is None or len(resume_df) == 0:
+                    st.error("No resume data available to analyze")
+                    return
+                    
+                st.info(f"Processing {len(resume_df)} resumes")
+                
+                # Create placeholder for results
+                placeholder = st.empty()
+                placeholder.info("Starting analysis...")
+                
+                # Manually create analysis results instead of using the analyzer
+                # This ensures we have data to display and can debug
+                
+                all_resumes = []
+                for i, row in resume_df.iterrows():
+                    # Simple scoring algorithm
+                    resume_skills = row.get('Skills', '')
+                    resume_tools = row.get('Tools', '')
+                    
+                    # Direct matching for demonstration
+                    skill_matches = sum(1 for skill in skills.split(', ') if skill.lower() in resume_skills.lower())
+                    tool_matches = sum(1 for tool in tools.split(', ') if tool.lower() in resume_tools.lower())
+                    
+                    # Calculate score (simple version)
+                    max_skills = max(1, len(skills.split(', ')))
+                    max_tools = max(1, len(tools.split(', ')))
+                    
+                    skill_score = skill_matches / max_skills
+                    tool_score = tool_matches / max_tools
+                    
+                    # Combined score
+                    score = 0.7 * skill_score + 0.3 * tool_score
+                    
+                    # Add to results
+                    all_resumes.append({
+                        'Resume ID': row.get('File Name', f"Resume_{i+1}"),
+                        'Skills': row.get('Skills', ''),
+                        'Tools': row.get('Tools', ''),
+                        'Certifications': row.get('Certifications', ''),
+                        'Score': float(score)
                     })
                     
-                    # Run the analysis
-                    results = resume_analyzer.categorize_resumes(job_desc, resume_df)
-                    
-                    # Store results in state manager
-                    resume_repository['analysis_results'] = results
-                    state_manager.set('resume_repository', resume_repository)
-                    
-                    display_success_message("Resume analysis completed!")
-                    
-                    # Force a rerun to update the UI
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error during analysis: {str(e)}")
-                    
-                    # Create fallback result set with random scores
-                    fallback_results = create_fallback_analysis(resume_df)
-                    resume_repository['analysis_results'] = fallback_results
-                    state_manager.set('resume_repository', resume_repository)
-                    
-                    # Force a rerun to update the UI
-                    st.rerun()
-        
+                    # Update progress
+                    if i % 10 == 0 or i == len(resume_df) - 1:
+                        placeholder.info(f"Processed {i+1}/{len(resume_df)} resumes...")
+                
+                # Sort by score
+                all_resumes.sort(key=lambda x: x['Score'], reverse=True)
+                
+                # Categorize
+                high_threshold = 0.25
+                medium_threshold = 0.15
+                
+                high_matches = [r for r in all_resumes if r['Score'] >= high_threshold]
+                medium_matches = [r for r in all_resumes if medium_threshold <= r['Score'] < high_threshold]
+                low_matches = [r for r in all_resumes if r['Score'] < medium_threshold]
+                
+                # Create results dictionary
+                results = {
+                    'top_3': all_resumes[:3] if len(all_resumes) >= 3 else all_resumes,
+                    'high_matches': high_matches,
+                    'medium_matches': medium_matches,
+                    'low_matches': low_matches
+                }
+                
+                # Store results in state manager
+                resume_repository['analysis_results'] = results
+                state_manager.set('resume_repository', resume_repository)
+                
+                placeholder.success(f"Analysis complete! Found {len(high_matches)} high matches, {len(medium_matches)} medium matches, and {len(low_matches)} low matches")
+                st.success(f"Resume analysis completed with {len(all_resumes)} resumes processed")
+                
+                # Force a rerun to update the UI
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error during analysis: {str(e)}")
+                st.exception(e)  # This will show the full traceback
         # Display top matches preview
         analysis_results = resume_repository.get('analysis_results')
         if analysis_results:
@@ -189,7 +253,10 @@ def extract_skills_from_text(text):
     common_skills = [
         'python', 'java', 'javascript', 'react', 'angular', 'node', 'aws', 'azure',
         'docker', 'kubernetes', 'sql', 'nosql', 'mongodb', 'machine learning', 'ai',
-        'data analysis', 'cloud', 'devops', 'ci/cd', 'agile', 'scrum', 'rest api'
+        'data analysis', 'cloud', 'devops', 'ci/cd', 'agile', 'scrum', 'rest api',
+        'spring', 'hibernate', 'microservices', 'django', 'flask', 'vue', 'typescript',
+        'html', 'css', 'php', 'ruby', 'c#', 'c++', 'golang', 'scala', 'rust',
+        'git', 'jenkins', 'terraform', 'ansible', 'prometheus', 'grafana'
     ]
     
     found_skills = []
@@ -206,7 +273,10 @@ def extract_tools_from_text(text):
     common_tools = [
         'git', 'jenkins', 'travis', 'circle ci', 'jira', 'confluence', 'slack',
         'vscode', 'intellij', 'eclipse', 'visual studio', 'docker', 'terraform',
-        'ansible', 'chef', 'puppet', 'kubernetes', 'aws cli', 'azure cli'
+        'ansible', 'chef', 'puppet', 'kubernetes', 'aws cli', 'azure cli',
+        'maven', 'gradle', 'npm', 'yarn', 'webpack', 'babel', 'gulp', 'grunt',
+        'jupyter', 'numpy', 'pandas', 'scikit-learn', 'tensorflow', 'pytorch',
+        'tableau', 'power bi', 'excel', 'postman', 'soapui', 'github', 'gitlab'
     ]
     
     found_tools = []
@@ -252,38 +322,35 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_mana
     
     if selection == "(Auto Selection)":
         # Auto-select resume pool based on JD type
-        default_file_map = {
-            "java_developer": "resumes_analysis_outputJDJavaDeveloper.csv",
-            "data_engineer": "resumes_analysis_output_JDPrincipalSoftwareEngineer.csv",
-            "general": "resumes_analysis_output.csv",
-            "unknown": "resumes_analysis_output.csv"
-        }
+        st.info(f"Attempting to auto-select resume pool for job type: {jd_type}")
         
-        default_file = default_file_map.get(jd_type, "resumes_analysis_output.csv")
+        # Use the helper method from the ResumeAnalyzer to find the appropriate file
+        resume_file_path = resume_analyzer.find_default_resume_file(jd_type)
         
-        # Search in multiple potential directories
-        search_paths = [
-            os.path.join(os.getcwd(), default_file),
-            os.path.join(os.getcwd(), "Data", "Extracted Resumes", default_file),
-            os.path.join(os.getcwd(), "Data", default_file)
-        ]
+        if resume_file_path and os.path.exists(resume_file_path):
+            try:
+                # Load the resume file
+                resume_df = pd.read_csv(resume_file_path)
+                st.success(f"Loaded resume pool from {os.path.basename(resume_file_path)}")
+                
+                # Ensure required columns exist
+                for col in ['File Name', 'Skills', 'Tools', 'Certifications']:
+                    if col not in resume_df.columns:
+                        resume_df[col] = ""
+                
+                return resume_df
+            except Exception as e:
+                st.error(f"Error loading resume file: {e}")
+                st.error("Please check the file format and try again.")
+                return None
         
-        for path in search_paths:
-            if os.path.exists(path):
-                try:
-                    resume_df = pd.read_csv(path)
-                    st.success(f"Loaded default resume pool based on job type ({jd_type})")
-                    return resume_df
-                except Exception as e:
-                    st.error(f"Error loading default resume file: {e}")
-                    continue
-        
-        # If no file found, use sample data
-        st.warning("Default resume pool file not found in expected locations. Using sample data.")
-        return create_sample_resume_df()
+        # If we reach here, file wasn't found or couldn't be loaded
+        st.error("Default resume pool file not found in expected locations.")
+        st.info("Try using 'Upload New Resume Pool' option to upload resume files manually.")
+        return None
     
     elif selection == "Upload New Resume Pool":
-       # Create UI for uploading new resumes
+        # Create UI for uploading new resumes
         new_pool_name = st.text_input("Enter new pool name:", key="new_pool_name")
         new_pool_files = st.file_uploader(
             "Upload resumes for the new pool", 
@@ -333,64 +400,93 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_mana
                     """)
             else:
                 st.warning("Please provide both a pool name and upload at least one resume file.")
+        return None
         
-        elif selection in ["General", "Data Engineer", "Java Developer"]:
-            # Load from predefined files
-            generic_map = {
-                "General": "resumes_analysis_output.csv",
-                "Data Engineer": "resumes_analysis_output_JDPrincipalSoftwareEngineer.csv",
-                "Java Developer": "resumes_analysis_outputJDJavaDeveloper.csv"
-            }
-            default_file = generic_map[selection]
-            
-            # Search in multiple potential directories
-            search_paths = [
-                os.path.join(os.getcwd(), default_file),
-                os.path.join(os.getcwd(), "Data", "Extracted Resumes", default_file),
-                os.path.join(os.getcwd(), "Data", default_file)
-            ]
-            
-            for path in search_paths:
-                if os.path.exists(path):
-                    try:
-                        resume_df = pd.read_csv(path)
-                        st.success(f"Loaded {selection} resume pool")
-                        return resume_df
-                    except Exception as e:
-                        st.error(f"Error loading resume file: {e}")
-                        continue
-            
-            # If no file found, return none
-            st.warning(f"Resume pool file for {selection} not found.")
-            return None
+    elif selection in ["General", "Data Engineer", "Java Developer"]:
+        # Map selection to job type for finding the right resume file
+        jd_type_map = {
+            "General": "general",
+            "Data Engineer": "data_engineer",
+            "Java Developer": "java_developer"
+        }
+        mapped_type = jd_type_map.get(selection, "general")
         
-        else:
-            # Check if a user-uploaded pool was selected
-            pools = resume_repository.get('pools', [])
-            for pool in pools:
-                if pool["pool_name"] == selection:
-                    # Convert stored dict back to DataFrame
-                    pool_df = pd.DataFrame(pool["data"])
-                    st.success(f"Loaded custom resume pool '{selection}' with {len(pool_df)} resumes")
-                    return pool_df
+        # Use the helper method to find the file
+        resume_file_path = resume_analyzer.find_default_resume_file(mapped_type)
+        
+        if resume_file_path and os.path.exists(resume_file_path):
+            try:
+                resume_df = pd.read_csv(resume_file_path)
+                st.success(f"Loaded {selection} resume pool from {os.path.basename(resume_file_path)}")
+                
+                # Ensure required columns exist
+                for col in ['File Name', 'Skills', 'Tools', 'Certifications']:
+                    if col not in resume_df.columns:
+                        resume_df[col] = ""
+                
+                return resume_df
+            except Exception as e:
+                st.error(f"Error loading resume file: {e}")
+                st.error("Please check the file format and try again.")
+        
+        # If no file found, return none
+        st.error(f"Resume pool file for {selection} not found.")
+        st.info("Try using 'Upload New Resume Pool' option to upload resume files manually.")
+        return None
     
-    # Default fallback - don't create a sample resume
-    st.warning("No valid resume pool selected.")
+    else:
+        # Check if a user-uploaded pool was selected
+        pools = resume_repository.get('pools', [])
+        for pool in pools:
+            if pool["pool_name"] == selection:
+                # Convert stored dict back to DataFrame
+                pool_df = pd.DataFrame(pool["data"])
+                st.success(f"Loaded custom resume pool '{selection}' with {len(pool_df)} resumes")
+                return pool_df
+    
+    # Default fallback - return None
+    st.error("No valid resume pool selected.")
+    st.info("Please select a resume pool or upload new resume files.")
     return None
 
 def display_top_matches(analysis_results):
     """Display top match previews"""
     display_subsection_header("Top Matches")
-    if 'top_3' in analysis_results and analysis_results['top_3']:
+    
+    st.info(f"Analysis results keys: {list(analysis_results.keys() if isinstance(analysis_results, dict) else [])}")
+    
+    if isinstance(analysis_results, dict) and 'top_3' in analysis_results and analysis_results['top_3']:
+        st.success(f"Found {len(analysis_results['top_3'])} top matches")
+        
         for i, resume in enumerate(analysis_results['top_3'][:3]):
-            st.markdown(f"""
-            <div class="metric-card">
-                <h4 style="margin:0">#{i + 1} - {resume['Resume ID']}</h4>
-                <p style="margin:0">Match: {resume['Score']:.2%}</p>
-            </div>
-            """, unsafe_allow_html=True)
+            try:
+                # Ensure score is a float and format it
+                score = resume.get('Score', 0)
+                if not isinstance(score, (int, float)):
+                    score = 0
+                
+                resume_id = resume.get('Resume ID', f"Resume #{i+1}")
+                skills = resume.get('Skills', '')
+                
+                # Display in a more reliable way
+                st.markdown(f"**#{i + 1} - {resume_id}**")
+                st.markdown(f"Match: {score:.2%}")
+                st.markdown(f"Skills: {skills[:100]}...")
+                st.markdown("---")
+            except Exception as e:
+                st.error(f"Error displaying match #{i+1}: {str(e)}")
     else:
-        st.info("No top matches available yet. Click 'Analyze Resumes' to see results.")
+        if not isinstance(analysis_results, dict):
+            st.error(f"Invalid analysis results type: {type(analysis_results)}")
+        elif 'top_3' not in analysis_results:
+            st.error("Analysis results missing 'top_3' key")
+        elif not analysis_results['top_3']:
+            st.info("No top matches available yet. Click 'Analyze Resumes' to see results.")
+        else:
+            st.error("Unknown error displaying top matches")
+
+
+
 
 def display_detailed_resume_analysis(categorized_resumes, job_desc):
     """Display detailed analysis of top resumes"""
